@@ -32,6 +32,8 @@
     .tab-active-hyperNa{ background:#b45309; color:#fff; }
     .tab-active-ivCalc { background:#0d9488; color:#fff; }
     .tab-inactive { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+    .calc-btn { padding:0.5rem; border-radius:0.375rem; font-size:0.875rem; font-weight:500; text-align:center; cursor:pointer; background:#f8fafc; border:1px solid #e2e8f0; transition:background 0.15s; }
+    .calc-btn:hover { background:#e2e8f0; }
     @media (min-width:1024px) { .input-panel { position:sticky; top:9rem; max-height:calc(100vh - 10rem); overflow-y:auto; } }
     @media print { .no-print{display:none!important} .collapsible-body{max-height:none!important;overflow:visible!important} body{font-size:11px} .card-print{break-inside:avoid} }
     @media (max-width:1023px) { #mobile-calc-bar{display:flex} }
@@ -64,23 +66,66 @@
   </div>
 </header>
 
-<!-- SHARED DEMOGRAPHICS -->
-<div class="max-w-7xl mx-auto px-4 pt-4 no-print">
+<!-- MOBILE DEMOGRAPHICS (collapsible, visible <1024px) -->
+<div id="mobile-demographics" class="lg:hidden max-w-7xl mx-auto px-4 pt-4 no-print">
   <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-    <button onclick="toggleSection('sec-demo')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
-      <span class="font-semibold text-sm text-slate-700">Patient Demographics <span class="text-slate-400 font-normal text-xs">(shared across all tabs)</span></span>
-      <svg id="chev-sec-demo" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    <button onclick="toggleSection('sec-demo-m')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+      <span class="font-semibold text-sm text-slate-700">Patient Demographics</span>
+      <svg id="chev-sec-demo-m" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
-    <div id="sec-demo" class="collapsible-body open px-4 pb-4">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div><label class="block text-xs font-medium text-slate-500 mb-1">Age</label><div class="flex gap-1"><input type="number" id="inp-age" min="0" max="120" step="0.1" placeholder="e.g. 5" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"><select id="inp-age-unit" class="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="years">yr</option><option value="months">mo</option></select></div></div>
-        <div><label class="block text-xs font-medium text-slate-500 mb-1">Weight (kg) <span class="text-red-500">*</span></label><input type="number" id="inp-weight" min="0.5" max="400" step="0.1" placeholder="kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
-        <div><label class="block text-xs font-medium text-slate-500 mb-1">Sex</label><div class="flex gap-3 mt-1"><label class="flex items-center gap-1 text-sm"><input type="radio" name="sex" value="male" class="accent-blue-600"> M</label><label class="flex items-center gap-1 text-sm"><input type="radio" name="sex" value="female" class="accent-blue-600"> F</label></div></div>
-        <div><label class="block text-xs font-medium text-slate-500 mb-1">Height (cm)</label><input type="number" id="inp-height" min="30" max="220" step="0.1" placeholder="cm" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
-      </div>
+    <div id="sec-demo-m" class="collapsible-body open px-4 pb-4">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="mobile-demo-fields"></div>
     </div>
   </div>
 </div>
+
+<div class="flex">
+<!-- LEFT SIDEBAR (desktop only) -->
+<aside id="left-sidebar" class="hidden lg:block no-print w-[260px] min-w-[260px] sticky top-[108px] h-[calc(100vh-108px)] overflow-y-auto thin-scroll border-r border-slate-200 bg-white px-3 py-4 space-y-4">
+  <!-- Patient Demographics -->
+  <div>
+    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Patient Demographics</h3>
+    <div class="space-y-2.5">
+      <div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">Age</label><div class="flex gap-1"><input type="number" id="inp-age" min="0" max="120" step="0.1" placeholder="e.g. 5" class="w-full px-2 py-1 border border-slate-300 rounded-md text-xs"><select id="inp-age-unit" class="px-1.5 py-1 border border-slate-300 rounded-md text-xs bg-white"><option value="years">yr</option><option value="months">mo</option></select></div></div>
+      <div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">Weight (kg) <span class="text-red-500">*</span></label><input type="number" id="inp-weight" min="0.5" max="400" step="0.1" placeholder="kg" class="w-full px-2 py-1 border border-slate-300 rounded-md text-xs"></div>
+      <div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">Sex</label><div class="flex gap-3"><label class="flex items-center gap-1 text-xs"><input type="radio" name="sex" value="male" class="accent-blue-600"> M</label><label class="flex items-center gap-1 text-xs"><input type="radio" name="sex" value="female" class="accent-blue-600"> F</label></div></div>
+      <div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">Height (cm)</label><input type="number" id="inp-height" min="30" max="220" step="0.1" placeholder="cm" class="w-full px-2 py-1 border border-slate-300 rounded-md text-xs"></div>
+    </div>
+  </div>
+  <hr class="border-slate-200">
+  <!-- Simple Calculator -->
+  <div>
+    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Calculator</h3>
+    <div id="sidebar-calc">
+      <input type="text" id="calc-display" readonly class="w-full px-2 py-2 bg-slate-900 text-right text-white text-lg font-mono rounded-lg mb-2 border-0" value="0">
+      <div class="grid grid-cols-4 gap-1">
+        <button onclick="calcBtn('C')" class="calc-btn bg-red-100 text-red-700 hover:bg-red-200">C</button>
+        <button onclick="calcBtn('⌫')" class="calc-btn bg-slate-200 text-slate-700 hover:bg-slate-300">⌫</button>
+        <button onclick="calcBtn('(')" class="calc-btn bg-slate-200 text-slate-700 hover:bg-slate-300">(</button>
+        <button onclick="calcBtn(')')" class="calc-btn bg-slate-200 text-slate-700 hover:bg-slate-300">)</button>
+        <button onclick="calcBtn('7')" class="calc-btn">7</button>
+        <button onclick="calcBtn('8')" class="calc-btn">8</button>
+        <button onclick="calcBtn('9')" class="calc-btn">9</button>
+        <button onclick="calcBtn('÷')" class="calc-btn bg-blue-100 text-blue-700 hover:bg-blue-200">÷</button>
+        <button onclick="calcBtn('4')" class="calc-btn">4</button>
+        <button onclick="calcBtn('5')" class="calc-btn">5</button>
+        <button onclick="calcBtn('6')" class="calc-btn">6</button>
+        <button onclick="calcBtn('×')" class="calc-btn bg-blue-100 text-blue-700 hover:bg-blue-200">×</button>
+        <button onclick="calcBtn('1')" class="calc-btn">1</button>
+        <button onclick="calcBtn('2')" class="calc-btn">2</button>
+        <button onclick="calcBtn('3')" class="calc-btn">3</button>
+        <button onclick="calcBtn('−')" class="calc-btn bg-blue-100 text-blue-700 hover:bg-blue-200">−</button>
+        <button onclick="calcBtn('0')" class="calc-btn">0</button>
+        <button onclick="calcBtn('.')" class="calc-btn">.</button>
+        <button onclick="calcBtn('=')" class="calc-btn bg-teal-600 text-white hover:bg-teal-700 font-bold">=</button>
+        <button onclick="calcBtn('+')" class="calc-btn bg-blue-100 text-blue-700 hover:bg-blue-200">+</button>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div id="main-area" class="flex-1 min-w-0">
 
 <!-- TAB: HYPOKALEMIA -->
 <div id="tab-content-hypoK" class="tab-panel">
@@ -281,6 +326,9 @@
     </section>
   </main>
 </div>
+
+</div><!-- /main-area -->
+</div><!-- /flex wrapper -->
 
 <!-- Mobile calc bar -->
 <div id="mobile-calc-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 shadow-lg z-40 no-print justify-center">
@@ -1843,6 +1891,97 @@ function renderIVAlerts(alerts) {
 
 // Initialize with one fluid line per set
 document.addEventListener('DOMContentLoaded', () => { addFluidLine('A'); addFluidLine('B'); });
+
+// ============================================================
+// SIMPLE CALCULATOR
+// ============================================================
+let calcExpr = '';
+let calcJustEvaluated = false;
+
+function calcBtn(key) {
+  const display = document.getElementById('calc-display');
+  if (key === 'C') { calcExpr = ''; display.value = '0'; calcJustEvaluated = false; return; }
+  if (key === '⌫') { calcExpr = calcExpr.slice(0,-1); display.value = calcExpr || '0'; return; }
+  if (key === '=') {
+    try {
+      const expr = calcExpr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
+      const result = Function('"use strict"; return (' + expr + ')')();
+      const rounded = Math.round(result * 1e10) / 1e10;
+      display.value = isFinite(rounded) ? rounded : 'Error';
+      calcExpr = isFinite(rounded) ? String(rounded) : '';
+      calcJustEvaluated = true;
+    } catch { display.value = 'Error'; calcExpr = ''; }
+    return;
+  }
+  // If just evaluated and user types a number, start fresh
+  if (calcJustEvaluated && /[0-9.]/.test(key)) { calcExpr = ''; calcJustEvaluated = false; }
+  calcJustEvaluated = false;
+  calcExpr += key;
+  display.value = calcExpr;
+}
+
+// ============================================================
+// MOBILE DEMOGRAPHICS SYNC
+// ============================================================
+// On mobile, demographics fields are separate DOM elements.
+// We populate them on DOMContentLoaded and sync on input.
+document.addEventListener('DOMContentLoaded', () => {
+  const mobileFields = document.getElementById('mobile-demo-fields');
+  if (!mobileFields) return;
+  // On mobile, clone the sidebar fields into mobile container
+  const sidebar = document.getElementById('left-sidebar');
+  if (!sidebar) return;
+  // Instead of cloning, we just move the fields based on screen size.
+  // Since the sidebar is hidden on mobile and mobile-demographics is hidden on desktop,
+  // we use a single set of IDs. Move the actual inputs based on visibility.
+  // Better approach: use one set of fields, move them via JS on resize.
+  syncDemoPosition();
+  window.addEventListener('resize', syncDemoPosition);
+});
+
+function syncDemoPosition() {
+  // The demographic inputs live in the sidebar on desktop. On mobile they need to be in mobile-demographics.
+  // We'll just populate mobile-demo-fields with a mirrored form that syncs.
+  const isDesktop = window.innerWidth >= 1024;
+  const mobileFields = document.getElementById('mobile-demo-fields');
+  const sidebarExists = document.getElementById('left-sidebar');
+  if (!mobileFields || !sidebarExists) return;
+
+  if (!mobileFields.dataset.initialized) {
+    mobileFields.dataset.initialized = 'true';
+    mobileFields.innerHTML = `
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Age</label><div class="flex gap-1"><input type="number" id="inp-age-m" min="0" max="120" step="0.1" placeholder="e.g. 5" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"><select id="inp-age-unit-m" class="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="years">yr</option><option value="months">mo</option></select></div></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Weight (kg) <span class="text-red-500">*</span></label><input type="number" id="inp-weight-m" min="0.5" max="400" step="0.1" placeholder="kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Sex</label><div class="flex gap-3 mt-1"><label class="flex items-center gap-1 text-sm"><input type="radio" name="sex-m" value="male" class="accent-blue-600"> M</label><label class="flex items-center gap-1 text-sm"><input type="radio" name="sex-m" value="female" class="accent-blue-600"> F</label></div></div>
+      <div><label class="block text-xs font-medium text-slate-500 mb-1">Height (cm)</label><input type="number" id="inp-height-m" min="30" max="220" step="0.1" placeholder="cm" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+    `;
+    // Sync mobile → desktop on input
+    const pairs = [['inp-age-m','inp-age'],['inp-weight-m','inp-weight'],['inp-height-m','inp-height'],['inp-age-unit-m','inp-age-unit']];
+    pairs.forEach(([mId, dId]) => {
+      const mEl = document.getElementById(mId);
+      const dEl = document.getElementById(dId);
+      if (mEl && dEl) {
+        mEl.addEventListener('input', () => { dEl.value = mEl.value; });
+        dEl.addEventListener('input', () => { mEl.value = dEl.value; });
+        mEl.addEventListener('change', () => { dEl.value = mEl.value; });
+        dEl.addEventListener('change', () => { mEl.value = dEl.value; });
+      }
+    });
+    // Sex radio sync
+    document.querySelectorAll('input[name="sex-m"]').forEach(r => {
+      r.addEventListener('change', () => {
+        const d = document.querySelector(`input[name="sex"][value="${r.value}"]`);
+        if (d) d.checked = true;
+      });
+    });
+    document.querySelectorAll('input[name="sex"]').forEach(r => {
+      r.addEventListener('change', () => {
+        const m = document.querySelector(`input[name="sex-m"][value="${r.value}"]`);
+        if (m) m.checked = true;
+      });
+    });
+  }
+}
 
 </script>
 </body>
