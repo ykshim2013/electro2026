@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Electrolyte Management Suite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .sev-normal   { background:#d1fae5; border-color:#059669; color:#065f46; }
+    .sev-mild     { background:#fef9c3; border-color:#ca8a04; color:#713f12; }
+    .sev-moderate { background:#ffedd5; border-color:#ea580c; color:#7c2d12; }
+    .sev-severe   { background:#fee2e2; border-color:#dc2626; color:#7f1d1d; }
+    .collapsible-body { max-height:0; overflow:hidden; transition:max-height 0.35s ease; }
+    .collapsible-body.open { max-height:4000px; }
+    .chevron { transition:transform 0.3s ease; }
+    .chevron.open { transform:rotate(180deg); }
+    @keyframes pulse-border { 0%,100%{border-color:#dc2626;box-shadow:0 0 0 0 rgba(220,38,38,0.3)} 50%{border-color:#fca5a5;box-shadow:0 0 12px 4px rgba(220,38,38,0.15)} }
+    .severe-pulse { animation:pulse-border 1.5s infinite; }
+    .alert-critical { background:#fef2f2; border-left:4px solid #dc2626; }
+    .alert-warning  { background:#fffbeb; border-left:4px solid #f59e0b; }
+    .alert-info     { background:#eff6ff; border-left:4px solid #3b82f6; }
+    .thin-scroll::-webkit-scrollbar { width:5px; }
+    .thin-scroll::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+    input[type=number]:focus,select:focus { outline:none; box-shadow:0 0 0 2px #3b82f6; border-color:#3b82f6; }
+    .tab-btn { padding:0.5rem 1rem; border-radius:9999px; font-size:0.8125rem; font-weight:600; cursor:pointer; white-space:nowrap; border:2px solid transparent; transition:all 0.2s; }
+    .tab-btn:hover { opacity:0.85; }
+    .tab-active-hypoK  { background:#1e40af; color:#fff; }
+    .tab-active-hyperK { background:#be123c; color:#fff; }
+    .tab-active-hypoNa { background:#4338ca; color:#fff; }
+    .tab-active-hyperNa{ background:#b45309; color:#fff; }
+    .tab-active-ivCalc { background:#0d9488; color:#fff; }
+    .tab-inactive { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+    @media (min-width:1024px) { .input-panel { position:sticky; top:9rem; max-height:calc(100vh - 10rem); overflow-y:auto; } }
+    @media print { .no-print{display:none!important} .collapsible-body{max-height:none!important;overflow:visible!important} body{font-size:11px} .card-print{break-inside:avoid} }
+    @media (max-width:1023px) { #mobile-calc-bar{display:flex} }
+    @media (min-width:1024px) { #mobile-calc-bar{display:none} }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<!-- HEADER + TAB BAR -->
+<header id="main-header" class="bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-600 text-white shadow-lg sticky top-0 z-50 no-print">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div>
+      <h1 id="header-title" class="text-xl font-bold tracking-tight">Electrolyte Management Suite</h1>
+      <p id="header-sub" class="text-blue-100 text-xs mt-0.5">Clinical Decision Support &amp; Educational Tool</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="header-badge" class="hidden px-3 py-1 rounded-full text-xs font-bold border-2"></span>
+      <button onclick="onResetTab()" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">Reset</button>
+      <button onclick="window.print()" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">Print</button>
+    </div>
+  </div>
+  <div class="max-w-7xl mx-auto px-4 pb-3">
+    <div class="flex gap-2 overflow-x-auto pb-1 thin-scroll">
+      <button id="tab-btn-hypoK" onclick="switchTab('hypoK')" class="tab-btn tab-active-hypoK">Hypokalemia</button>
+      <button id="tab-btn-hyperK" onclick="switchTab('hyperK')" class="tab-btn tab-inactive">Hyperkalemia</button>
+      <button id="tab-btn-hypoNa" onclick="switchTab('hypoNa')" class="tab-btn tab-inactive">Hyponatremia</button>
+      <button id="tab-btn-hyperNa" onclick="switchTab('hyperNa')" class="tab-btn tab-inactive">Hypernatremia</button>
+      <button id="tab-btn-ivCalc" onclick="switchTab('ivCalc')" class="tab-btn tab-inactive">IV Fluid Calculator</button>
+    </div>
+  </div>
+</header>
+
+<!-- SHARED DEMOGRAPHICS -->
+<div class="max-w-7xl mx-auto px-4 pt-4 no-print">
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <button onclick="toggleSection('sec-demo')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+      <span class="font-semibold text-sm text-slate-700">Patient Demographics <span class="text-slate-400 font-normal text-xs">(shared across all tabs)</span></span>
+      <svg id="chev-sec-demo" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    <div id="sec-demo" class="collapsible-body open px-4 pb-4">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Age</label><div class="flex gap-1"><input type="number" id="inp-age" min="0" max="120" step="0.1" placeholder="e.g. 5" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"><select id="inp-age-unit" class="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="years">yr</option><option value="months">mo</option></select></div></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Weight (kg) <span class="text-red-500">*</span></label><input type="number" id="inp-weight" min="0.5" max="400" step="0.1" placeholder="kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Sex</label><div class="flex gap-3 mt-1"><label class="flex items-center gap-1 text-sm"><input type="radio" name="sex" value="male" class="accent-blue-600"> M</label><label class="flex items-center gap-1 text-sm"><input type="radio" name="sex" value="female" class="accent-blue-600"> F</label></div></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Height (cm)</label><input type="number" id="inp-height" min="30" max="220" step="0.1" placeholder="cm" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: HYPOKALEMIA -->
+<div id="tab-content-hypoK" class="tab-panel">
+  <main class="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+    <aside class="input-panel space-y-3 thin-scroll no-print">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-lytes')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Serum Electrolytes</span><svg id="chev-hk-lytes" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-lytes" class="collapsible-body open px-4 pb-4"><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-slate-500 mb-1">K+ (mEq/L) <span class="text-red-500">*</span></label><input type="number" id="hk-K" min="0.5" max="8" step="0.1" placeholder="e.g. 2.8" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Na+</label><input type="number" id="hk-Na" min="100" max="180" step="1" placeholder="140" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Mg2+ (mg/dL)</label><input type="number" id="hk-Mg" min="0" max="10" step="0.1" placeholder="1.7-2.2" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Ca2+ (mg/dL)</label><input type="number" id="hk-Ca" min="0" max="20" step="0.1" placeholder="8.5-10.5" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Glucose</label><input type="number" id="hk-glucose" min="0" max="2000" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">BUN</label><input type="number" id="hk-BUN" min="0" max="300" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div class="col-span-2"><label class="block text-xs font-medium text-slate-500 mb-1">Serum Osm <span class="text-slate-400 text-[10px]">auto if blank</span></label><input type="number" id="hk-serum-osm" min="200" max="450" step="1" placeholder="mOsm/kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div></div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-ab')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Acid-Base</span><svg id="chev-hk-ab" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-ab" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-3 gap-3"><div><label class="block text-xs font-medium text-slate-500 mb-1">pH</label><input type="number" id="hk-pH" min="6.8" max="7.8" step="0.01" placeholder="7.40" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">HCO3-</label><input type="number" id="hk-HCO3" min="0" max="60" step="0.1" placeholder="24" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">pCO2</label><input type="number" id="hk-pCO2" min="10" max="120" step="1" placeholder="40" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div></div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-renal')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Renal Function</span><svg id="chev-hk-renal" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-renal" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-slate-500 mb-1">Cr (mg/dL)</label><input type="number" id="hk-Cr" min="0.1" max="30" step="0.01" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">eGFR <span class="text-slate-400 text-[10px]">auto</span></label><input type="number" id="hk-eGFR" min="0" max="200" step="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div></div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-urine')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Urine Studies</span><svg id="chev-hk-urine" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-urine" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-slate-500 mb-1">Urine K+</label><input type="number" id="hk-urine-K" min="0" max="200" step="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Cr</label><input type="number" id="hk-urine-Cr" min="0" max="500" step="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Na+</label><input type="number" id="hk-urine-Na" min="0" max="300" step="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Osm</label><input type="number" id="hk-urine-osm" min="50" max="1400" step="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div></div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-ecg')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">ECG Findings</span><svg id="chev-hk-ecg" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-ecg" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-ecg" value="u_waves" class="accent-blue-600"> U waves</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-ecg" value="t_flat" class="accent-blue-600"> T wave flattening</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-ecg" value="st_dep" class="accent-blue-600"> ST depression</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-ecg" value="qt_prolongation" class="accent-blue-600"> QT prolongation</label><label class="flex items-center gap-2 text-sm text-red-700 font-medium"><input type="checkbox" name="hk-ecg" value="vt_vf" class="accent-red-600"> VT / VF</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-ecg" value="av_block" class="accent-blue-600"> AV block</label></div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-sym')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Symptoms</span><svg id="chev-hk-sym" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-sym" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-sym" value="asymptomatic" class="accent-blue-600"> Asymptomatic</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-sym" value="weakness" class="accent-blue-600"> Weakness</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-sym" value="cramps" class="accent-blue-600"> Muscle cramps</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-sym" value="paralysis" class="accent-blue-600"> Flaccid paralysis</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-sym" value="ileus" class="accent-blue-600"> Ileus</label><label class="flex items-center gap-2 text-sm text-red-700"><input type="checkbox" name="hk-sym" value="resp_failure" class="accent-red-600"> Respiratory failure</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-sym" value="rhabdo" class="accent-blue-600"> Rhabdomyolysis</label></div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hk-meds')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Medications</span><svg id="chev-hk-meds" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hk-meds" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="loop_diuretics" class="accent-blue-600"> Loop diuretics</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="thiazides" class="accent-blue-600"> Thiazides</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="amphotericin_b" class="accent-blue-600"> Amphotericin B</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="insulin" class="accent-blue-600"> Insulin</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="beta_agonists" class="accent-blue-600"> Beta-2 agonists</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="laxatives" class="accent-blue-600"> Laxatives</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="steroids" class="accent-blue-600"> Steroids</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="cisplatin" class="accent-blue-600"> Cisplatin</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hk-med" value="aminoglycosides" class="accent-blue-600"> Aminoglycosides</label><label class="flex items-center gap-2 text-sm text-red-700 font-medium"><input type="checkbox" name="hk-med" value="digoxin" class="accent-red-600"> Digoxin</label></div></div></div>
+      <button onclick="onCalculate()" class="hidden lg:block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-md text-sm">Calculate</button>
+    </aside>
+    <section id="results-hypoK">
+      <div id="placeholder-hypoK" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Enter data and click Calculate</p><p class="text-sm mt-1">Required: K+ and Weight</p></div>
+      <div id="errors-hypoK" class="hidden mb-4 alert-critical rounded-lg p-4"><p class="font-semibold text-red-700 text-sm mb-1">Errors</p><ul id="error-list-hypoK" class="text-sm text-red-600 list-disc list-inside"></ul></div>
+      <div id="results-content-hypoK" class="hidden space-y-4"><div id="card-hk-severity"></div><div id="card-hk-deficit"></div><div id="card-hk-protocol"></div><div id="card-hk-electrolyte"></div><div id="card-hk-ddx"></div><div id="card-hk-patho"></div><div id="card-hk-pearls"></div><div id="card-hk-refs"></div></div>
+    </section>
+  </main>
+</div>
+
+<!-- PLACEHOLDER TABS - will be filled next -->
+<div id="tab-content-hyperK" class="tab-panel hidden">
+  <main class="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+    <aside class="input-panel space-y-3 thin-scroll no-print">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hpk-lytes')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Serum Electrolytes</span><svg id="chev-hpk-lytes" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hpk-lytes" class="collapsible-body open px-4 pb-4"><div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">K+ (mEq/L) <span class="text-red-500">*</span></label><input type="number" id="hpk-K" min="0.5" max="12" step="0.1" placeholder="e.g. 6.5" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Na+</label><input type="number" id="hpk-Na" min="100" max="180" step="1" placeholder="140" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Ca2+ (mg/dL)</label><input type="number" id="hpk-Ca" min="0" max="20" step="0.1" placeholder="8.5-10.5" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Glucose</label><input type="number" id="hpk-glucose" min="0" max="2000" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">BUN</label><input type="number" id="hpk-BUN" min="0" max="300" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Mg2+</label><input type="number" id="hpk-Mg" min="0" max="10" step="0.1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hpk-ab')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Acid-Base</span><svg id="chev-hpk-ab" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hpk-ab" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-3 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">pH</label><input type="number" id="hpk-pH" min="6.8" max="7.8" step="0.01" placeholder="7.40" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">HCO3-</label><input type="number" id="hpk-HCO3" min="0" max="60" step="0.1" placeholder="24" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">pCO2</label><input type="number" id="hpk-pCO2" min="10" max="120" step="1" placeholder="40" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hpk-renal')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Renal Function</span><svg id="chev-hpk-renal" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hpk-renal" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Cr (mg/dL)</label><input type="number" id="hpk-Cr" min="0.1" max="30" step="0.01" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">eGFR <span class="text-slate-400 text-[10px]">auto</span></label><input type="number" id="hpk-eGFR" min="0" max="200" step="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div class="col-span-2"><label class="block text-xs font-medium text-slate-500 mb-1">Urine Output</label><select id="hpk-urine-output" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="">Select...</option><option value="normal">Normal (>0.5 mL/kg/hr)</option><option value="oliguric">Oliguric (0.1-0.5 mL/kg/hr)</option><option value="anuric">Anuric (<0.1 mL/kg/hr)</option></select></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hpk-ecg')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">ECG Findings</span><svg id="chev-hpk-ecg" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hpk-ecg" class="collapsible-body open px-4 pb-4"><div class="grid grid-cols-1 gap-1.5">
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ecg" value="peaked_t" class="accent-rose-600"> Peaked T waves</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ecg" value="flat_p" class="accent-rose-600"> Flattened P waves</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ecg" value="pr_prolonged" class="accent-rose-600"> PR prolongation</label>
+        <label class="flex items-center gap-2 text-sm text-red-700 font-medium"><input type="checkbox" name="hpk-ecg" value="wide_qrs" class="accent-red-600"> Widened QRS</label>
+        <label class="flex items-center gap-2 text-sm text-red-700 font-medium"><input type="checkbox" name="hpk-ecg" value="sine_wave" class="accent-red-600"> Sine wave pattern</label>
+        <label class="flex items-center gap-2 text-sm text-red-700 font-medium"><input type="checkbox" name="hpk-ecg" value="vt_vf" class="accent-red-600"> VT / VF / Cardiac arrest</label>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hpk-context')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Clinical Context</span><svg id="chev-hpk-context" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hpk-context" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5">
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="tumor_lysis" class="accent-rose-600"> Tumor lysis syndrome</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="rhabdo" class="accent-rose-600"> Rhabdomyolysis</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="hemolysis" class="accent-rose-600"> Hemolysis / Pseudohyperkalemia</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="ckd" class="accent-rose-600"> CKD / ESRD</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="on_dialysis" class="accent-rose-600"> Currently on dialysis</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="adrenal_insuff" class="accent-rose-600"> Adrenal insufficiency</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-ctx" value="burns" class="accent-rose-600"> Burns / Crush injury</label>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hpk-meds')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Medications</span><svg id="chev-hpk-meds" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hpk-meds" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5">
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="acei_arb" class="accent-rose-600"> ACEi / ARB</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="k_sparing" class="accent-rose-600"> K+-sparing diuretics (spironolactone, amiloride, triamterene)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="nsaids" class="accent-rose-600"> NSAIDs</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="tmp_smx" class="accent-rose-600"> TMP-SMX (Bactrim)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="beta_blockers" class="accent-rose-600"> Beta-blockers</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="digoxin" class="accent-rose-600"> Digoxin</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="heparin" class="accent-rose-600"> Heparin</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="calcineurin" class="accent-rose-600"> Calcineurin inhibitors (tacrolimus, cyclosporine)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hpk-med" value="succinylcholine" class="accent-rose-600"> Succinylcholine</label>
+      </div></div></div>
+      <button onclick="onCalculate()" class="hidden lg:block w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-md text-sm">Calculate</button>
+    </aside>
+    <section id="results-hyperK">
+      <div id="placeholder-hyperK" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Enter data and click Calculate</p><p class="text-sm mt-1">Required: K+ and Weight</p></div>
+      <div id="errors-hyperK" class="hidden mb-4 alert-critical rounded-lg p-4"><p class="font-semibold text-red-700 text-sm mb-1">Errors</p><ul id="error-list-hyperK" class="text-sm text-red-600 list-disc list-inside"></ul></div>
+      <div id="results-content-hyperK" class="hidden space-y-4"><div id="card-hpk-severity"></div><div id="card-hpk-emergency"></div><div id="card-hpk-dosing"></div><div id="card-hpk-dialysis"></div><div id="card-hpk-ddx"></div><div id="card-hpk-patho"></div><div id="card-hpk-pearls"></div><div id="card-hpk-refs"></div></div>
+    </section>
+  </main>
+</div>
+<div id="tab-content-hypoNa" class="tab-panel hidden">
+  <main class="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+    <aside class="input-panel space-y-3 thin-scroll no-print">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hn-lytes')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Serum Electrolytes</span><svg id="chev-hn-lytes" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hn-lytes" class="collapsible-body open px-4 pb-4"><div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Na+ (mEq/L) <span class="text-red-500">*</span></label><input type="number" id="hn-Na" min="90" max="180" step="1" placeholder="e.g. 125" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">K+</label><input type="number" id="hn-K" min="0.5" max="12" step="0.1" placeholder="mEq/L" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Glucose</label><input type="number" id="hn-glucose" min="0" max="2000" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Serum Osm <span class="text-slate-400 text-[10px]">auto</span></label><input type="number" id="hn-serum-osm" min="200" max="450" step="1" placeholder="mOsm/kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">BUN</label><input type="number" id="hn-BUN" min="0" max="300" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Cr</label><input type="number" id="hn-Cr" min="0.1" max="30" step="0.01" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hn-urine')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Urine Studies</span><svg id="chev-hn-urine" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hn-urine" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Na+</label><input type="number" id="hn-urine-Na" min="0" max="300" step="1" placeholder="mEq/L" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Osm</label><input type="number" id="hn-urine-osm" min="50" max="1400" step="1" placeholder="mOsm/kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Urine K+</label><input type="number" id="hn-urine-K" min="0" max="200" step="1" placeholder="mEq/L" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hn-clinical')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Clinical Assessment</span><svg id="chev-hn-clinical" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hn-clinical" class="collapsible-body open px-4 pb-4"><div class="space-y-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Volume Status</label><select id="hn-volume" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="">Select...</option><option value="hypovolemic">Hypovolemic (dry mucous membranes, ↓ skin turgor, tachycardia)</option><option value="euvolemic">Euvolemic (clinically normal)</option><option value="hypervolemic">Hypervolemic (edema, ascites, JVD)</option></select></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Chronicity</label><select id="hn-chronicity" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="chronic">Chronic (≥48 hours or unknown)</option><option value="acute">Acute (<48 hours, documented)</option></select></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Symptom Severity</label><select id="hn-symptoms" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="asymptomatic">Asymptomatic</option><option value="mild">Mild (nausea, headache, fatigue)</option><option value="moderate">Moderate (confusion, vomiting, gait instability)</option><option value="severe">Severe (seizures, obtundation, coma, respiratory arrest)</option></select></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hn-history')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">History / Context</span><svg id="chev-hn-history" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hn-history" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5">
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="chf" class="accent-indigo-600"> Heart failure (CHF)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="cirrhosis" class="accent-indigo-600"> Cirrhosis</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="nephrotic" class="accent-indigo-600"> Nephrotic syndrome</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="siadh" class="accent-indigo-600"> SIADH (known or suspected)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="hypothyroid" class="accent-indigo-600"> Hypothyroidism</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="adrenal_insuff" class="accent-indigo-600"> Adrenal insufficiency</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="thiazides" class="accent-indigo-600"> Thiazide diuretics</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="ssri" class="accent-indigo-600"> SSRI / antipsychotics</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="polydipsia" class="accent-indigo-600"> Psychogenic polydipsia</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="beer_potomania" class="accent-indigo-600"> Beer potomania / tea-and-toast</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="postop" class="accent-indigo-600"> Post-operative</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hn-hx" value="marathon" class="accent-indigo-600"> Exercise-associated (marathon)</label>
+      </div></div></div>
+      <button onclick="onCalculate()" class="hidden lg:block w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-md text-sm">Calculate</button>
+    </aside>
+    <section id="results-hypoNa">
+      <div id="placeholder-hypoNa" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Enter data and click Calculate</p><p class="text-sm mt-1">Required: Na+ and Weight</p></div>
+      <div id="errors-hypoNa" class="hidden mb-4 alert-critical rounded-lg p-4"><p class="font-semibold text-red-700 text-sm mb-1">Errors</p><ul id="error-list-hypoNa" class="text-sm text-red-600 list-disc list-inside"></ul></div>
+      <div id="results-content-hypoNa" class="hidden space-y-4"><div id="card-hn-severity"></div><div id="card-hn-fwe"></div><div id="card-hn-correction"></div><div id="card-hn-protocol"></div><div id="card-hn-adrogue"></div><div id="card-hn-ddx"></div><div id="card-hn-ods"></div><div id="card-hn-patho"></div><div id="card-hn-pearls"></div><div id="card-hn-refs"></div></div>
+    </section>
+  </main>
+</div>
+<div id="tab-content-hyperNa" class="tab-panel hidden">
+  <main class="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+    <aside class="input-panel space-y-3 thin-scroll no-print">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hna-lytes')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Serum Electrolytes</span><svg id="chev-hna-lytes" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hna-lytes" class="collapsible-body open px-4 pb-4"><div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Na+ (mEq/L) <span class="text-red-500">*</span></label><input type="number" id="hna-Na" min="90" max="200" step="1" placeholder="e.g. 158" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">K+</label><input type="number" id="hna-K" min="0.5" max="12" step="0.1" placeholder="mEq/L" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Glucose</label><input type="number" id="hna-glucose" min="0" max="2000" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">BUN</label><input type="number" id="hna-BUN" min="0" max="300" step="1" placeholder="mg/dL" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Serum Osm <span class="text-slate-400 text-[10px]">auto</span></label><input type="number" id="hna-serum-osm" min="200" max="500" step="1" placeholder="mOsm/kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hna-urine')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Urine Studies</span><svg id="chev-hna-urine" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hna-urine" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Osm</label><input type="number" id="hna-urine-osm" min="50" max="1400" step="1" placeholder="mOsm/kg" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Na+</label><input type="number" id="hna-urine-Na" min="0" max="300" step="1" placeholder="mEq/L" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Urine Output (mL/hr)</label><input type="number" id="hna-urine-vol" min="0" max="2000" step="1" placeholder="mL/hr" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hna-clinical')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Clinical Assessment</span><svg id="chev-hna-clinical" class="chevron open w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hna-clinical" class="collapsible-body open px-4 pb-4"><div class="space-y-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Chronicity</label><select id="hna-chronicity" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="chronic">Chronic (≥48 hours or unknown)</option><option value="acute">Acute (<48 hours, documented)</option></select></div>
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Symptom Severity</label><select id="hna-symptoms" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="asymptomatic">Asymptomatic</option><option value="mild">Mild (lethargy, irritability, thirst)</option><option value="moderate">Moderate (confusion, weakness)</option><option value="severe">Severe (seizures, coma, obtundation)</option></select></div>
+      </div></div></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><button onclick="toggleSection('hna-context')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50"><span class="font-semibold text-sm text-slate-700">Context</span><svg id="chev-hna-context" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button><div id="hna-context" class="collapsible-body px-4 pb-4"><div class="grid grid-cols-1 gap-1.5">
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="impaired_thirst" class="accent-amber-600"> Impaired thirst (elderly, infant, intubated)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="central_di" class="accent-amber-600"> Central DI (suspected/known)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="nephrogenic_di" class="accent-amber-600"> Nephrogenic DI (lithium, hypercalcemia)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="osmotic_diuresis" class="accent-amber-600"> Osmotic diuresis (hyperglycemia, mannitol, urea)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="gi_losses" class="accent-amber-600"> GI losses (diarrhea, lactulose, NG suction)</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="intubated" class="accent-amber-600"> Intubated / ICU patient</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="post_neurosurg" class="accent-amber-600"> Post-neurosurgery</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="hna-ctx" value="sodium_load" class="accent-amber-600"> Sodium loading (hypertonic saline, NaHCO3, salt poisoning)</label>
+      </div></div></div>
+      <button onclick="onCalculate()" class="hidden lg:block w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl shadow-md text-sm">Calculate</button>
+    </aside>
+    <section id="results-hyperNa">
+      <div id="placeholder-hyperNa" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Enter data and click Calculate</p><p class="text-sm mt-1">Required: Na+ and Weight</p></div>
+      <div id="errors-hyperNa" class="hidden mb-4 alert-critical rounded-lg p-4"><p class="font-semibold text-red-700 text-sm mb-1">Errors</p><ul id="error-list-hyperNa" class="text-sm text-red-600 list-disc list-inside"></ul></div>
+      <div id="results-content-hyperNa" class="hidden space-y-4"><div id="card-hna-severity"></div><div id="card-hna-fwd"></div><div id="card-hna-correction"></div><div id="card-hna-infusate"></div><div id="card-hna-protocol"></div><div id="card-hna-di"></div><div id="card-hna-ddx"></div><div id="card-hna-patho"></div><div id="card-hna-pearls"></div><div id="card-hna-refs"></div></div>
+    </section>
+  </main>
+</div>
+<div id="tab-content-ivCalc" class="tab-panel hidden">
+  <main class="max-w-7xl mx-auto px-4 py-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4 no-print">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-sm text-slate-700">IV Fluid Lines</h3>
+        <button onclick="addFluidLine()" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg">+ Add Fluid Line</button>
+      </div>
+      <div id="iv-fluid-lines" class="space-y-3"></div>
+      <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div><label class="block text-xs font-medium text-slate-500 mb-1">Duration (hours)</label><input type="number" id="iv-duration" min="1" max="72" step="1" value="24" placeholder="24" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+      </div>
+      <button onclick="onCalculate()" class="mt-3 w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-md text-sm no-print">Calculate Electrolyte Delivery</button>
+    </div>
+    <section id="results-ivCalc">
+      <div id="placeholder-ivCalc" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Add fluid lines above, then Calculate</p></div>
+      <div id="errors-ivCalc" class="hidden mb-4 alert-critical rounded-lg p-4"><p class="font-semibold text-red-700 text-sm mb-1">Errors</p><ul id="error-list-ivCalc" class="text-sm text-red-600 list-disc list-inside"></ul></div>
+      <div id="results-content-ivCalc" class="hidden space-y-4"><div id="card-iv-summary"></div><div id="card-iv-breakdown"></div><div id="card-iv-gir"></div><div id="card-iv-alerts"></div></div>
+    </section>
+  </main>
+</div>
+
+<!-- Mobile calc bar -->
+<div id="mobile-calc-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 shadow-lg z-40 no-print justify-center">
+  <button onclick="onCalculate()" id="mobile-calc-btn" class="w-full max-w-md mx-auto py-3 bg-blue-600 text-white font-semibold rounded-xl shadow-md text-sm">Calculate</button>
+</div>
+
+<!-- Footer -->
+<footer class="max-w-7xl mx-auto px-4 py-6 mt-8 border-t border-slate-200 text-center text-xs text-slate-400">
+  <p class="font-medium text-slate-500 mb-1">Educational Disclaimer</p>
+  <p>For educational purposes and clinical decision support only. Not a substitute for professional medical advice.</p>
+</footer>
+<div class="lg:hidden h-20"></div>
+
+<script>
+// Will be added in subsequent edits
+const TABS = ['hypoK','hyperK','hypoNa','hyperNa','ivCalc'];
+let activeTab = 'hypoK';
+
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  const chev = document.getElementById('chev-' + id);
+  if (el) el.classList.toggle('open');
+  if (chev) chev.classList.toggle('open');
+}
+
+const TAB_COLORS = {
+  hypoK:  { bg:'from-blue-700 via-blue-600 to-cyan-600', btn:'bg-blue-600 hover:bg-blue-700' },
+  hyperK: { bg:'from-rose-700 via-rose-600 to-pink-600', btn:'bg-rose-600 hover:bg-rose-700' },
+  hypoNa: { bg:'from-indigo-700 via-indigo-600 to-violet-600', btn:'bg-indigo-600 hover:bg-indigo-700' },
+  hyperNa:{ bg:'from-amber-700 via-amber-600 to-yellow-600', btn:'bg-amber-600 hover:bg-amber-700' },
+  ivCalc: { bg:'from-teal-700 via-teal-600 to-cyan-600', btn:'bg-teal-600 hover:bg-teal-700' }
+};
+const TAB_TITLES = {
+  hypoK:'Hypokalemia Management', hyperK:'Hyperkalemia Management',
+  hypoNa:'Hyponatremia Management', hyperNa:'Hypernatremia Management',
+  ivCalc:'IV Fluid Electrolyte Calculator'
+};
+
+function switchTab(tabId) {
+  TABS.forEach(t => {
+    document.getElementById('tab-content-'+t).classList.toggle('hidden', t!==tabId);
+    const btn = document.getElementById('tab-btn-'+t);
+    btn.className = 'tab-btn ' + (t===tabId ? 'tab-active-'+t : 'tab-inactive');
+  });
+  activeTab = tabId;
+  const h = document.getElementById('main-header');
+  h.className = 'bg-gradient-to-r '+TAB_COLORS[tabId].bg+' text-white shadow-lg sticky top-0 z-50 no-print';
+  document.getElementById('header-title').textContent = TAB_TITLES[tabId];
+  const mcBtn = document.getElementById('mobile-calc-btn');
+  mcBtn.className = 'w-full max-w-md mx-auto py-3 '+TAB_COLORS[tabId].btn+' text-white font-semibold rounded-xl shadow-md text-sm';
+}
+
+function onResetTab() {
+  // Reset inputs for the active tab
+  const panel = document.getElementById('tab-content-'+activeTab);
+  if (panel) {
+    panel.querySelectorAll('input[type=number]').forEach(el => el.value='');
+    panel.querySelectorAll('input[type=checkbox]').forEach(el => el.checked=false);
+    panel.querySelectorAll('input[type=radio]').forEach(el => el.checked=false);
+  }
+  const rc = document.getElementById('results-content-'+activeTab);
+  const ph = document.getElementById('placeholder-'+activeTab);
+  if (rc) rc.classList.add('hidden');
+  if (ph) ph.classList.remove('hidden');
+  document.getElementById('header-badge').classList.add('hidden');
+}
+
+function onCalculate() {
+  if (activeTab === 'hypoK') calcHypoK();
+  else if (activeTab === 'hyperK') calcHyperK();
+  else if (activeTab === 'hypoNa') calcHypoNa();
+  else if (activeTab === 'hyperNa') calcHyperNa();
+  else if (activeTab === 'ivCalc') calcFluidElectrolytes();
+}
+
+function getDemo() {
+  const ageRaw = parseFloat(document.getElementById('inp-age').value);
+  const ageUnit = document.getElementById('inp-age-unit').value;
+  const ageYears = ageUnit==='months' ? ageRaw/12 : ageRaw;
+  const weight = parseFloat(document.getElementById('inp-weight').value);
+  const sex = document.querySelector('input[name=sex]:checked')?.value || null;
+  const height = parseFloat(document.getElementById('inp-height').value) || null;
+  const isAdult = !ageYears || ageYears >= 18;
+  const isPed = ageYears && ageYears < 18;
+  return { ageRaw, ageUnit, ageYears, weight, sex, height, isAdult, isPed };
+}
+
+// ============================================================
+// SHARED NAMESPACE
+// ============================================================
+const SHARED = {
+  TBW(weight, sex, ageYears) {
+    if (!weight) return null;
+    if (ageYears && ageYears < 1) return weight * 0.7;
+    if (ageYears && ageYears < 12) return weight * 0.6;
+    if (sex === 'female') return ageYears && ageYears > 65 ? weight * 0.45 : weight * 0.5;
+    return weight * 0.6;
+  },
+  eGFR_CKDEPI(Cr, age, sex) {
+    if (!Cr||!age||!sex) return null;
+    const k = sex==='female'?0.7:0.9;
+    const alpha = sex==='female'?-0.241:-0.302;
+    const r = Cr/k;
+    let g = 142*Math.pow(Math.min(r,1),alpha)*Math.pow(Math.max(r,1),-1.200)*Math.pow(0.9938,age);
+    if (sex==='female') g*=1.012;
+    return Math.round(g);
+  },
+  eGFR_Schwartz(Cr, height_cm) {
+    if (!Cr||!height_cm) return null;
+    return Math.round((0.413*height_cm)/Cr);
+  },
+  serumOsm(Na, glucose, BUN) {
+    if (!Na) return null;
+    return Math.round(2*Na + (glucose||0)/18 + (BUN||0)/2.8);
+  },
+  acidBase(pH, HCO3, pCO2) {
+    if (!pH) return null;
+    if (pH > 7.45) { if (HCO3&&HCO3>26) return 'Metabolic Alkalosis'; if (pCO2&&pCO2<35) return 'Respiratory Alkalosis'; return 'Alkalemia'; }
+    if (pH < 7.35) { if (HCO3&&HCO3<22) return 'Metabolic Acidosis'; if (pCO2&&pCO2>45) return 'Respiratory Acidosis'; return 'Acidemia'; }
+    return 'Normal pH';
+  },
+  adrogueMadias(infNa, serumNa, TBW) {
+    if (!TBW) return null;
+    return (infNa - serumNa) / (TBW + 1);
+  },
+  correctedNa(Na, glucose) {
+    if (!Na || !glucose || glucose <= 100) return Na;
+    return Na + 1.6 * ((glucose - 100) / 100);
+  }
+};
+
+// Stub functions for tabs not yet implemented
+function calcHyperK() { alert('Hyperkalemia tab coming next...'); }
+function calcHypoNa() { alert('Hyponatremia tab coming next...'); }
+function calcHyperNa() { alert('Hypernatremia tab coming next...'); }
+function calcFluidElectrolytes() { alert('IV Fluid Calculator coming next...'); }
+
+// ============================================================
+// HYPOKALEMIA — CALC_HYPOK
+// ============================================================
+const CALC_HYPOK = {
+  severity(K) {
+    if (K >= 3.5) return { grade:'normal', label:'Normal', color:'green', css:'sev-normal', urgency:'No hypokalemia detected.' };
+    if (K >= 3.0) return { grade:'mild', label:'Mild Hypokalemia', color:'yellow', css:'sev-mild', urgency:'Outpatient management typically appropriate. Oral replacement preferred.' };
+    if (K >= 2.5) return { grade:'moderate', label:'Moderate Hypokalemia', color:'orange', css:'sev-moderate', urgency:'Consider IV replacement if symptomatic. Cardiac monitoring recommended.' };
+    return { grade:'severe', label:'Severe Hypokalemia', color:'red', css:'sev-severe', urgency:'URGENT: Life-threatening. Immediate IV replacement and continuous cardiac monitoring required. ICU setting recommended.' };
+  },
+  kDeficit(K, weight, isAdult) {
+    if (K >= 3.5) return null;
+    const gap = 3.5 - K;
+    if (isAdult) return { low: Math.round(gap*100), high: Math.round(gap*200), method:'Sterns empirical rule', note:'Each 0.1 mEq/L decrease below 3.5 corresponds to ~100-200 mEq total body deficit' };
+    return { low: Math.round(gap*weight*1.0), high: Math.round(gap*weight*2.0), method:'Weight-based pediatric estimate', note:'Using distribution coefficient of 0.4 × body weight; range reflects 1-2 mEq/kg per 1 mEq/L deficit' };
+  },
+  TTKG(urineK, serumK, urineOsm, serumOsm) {
+    if (!urineK||!serumK||!urineOsm||!serumOsm) return null;
+    if (urineOsm < serumOsm) return { value:null, error:'Urine Osm < Serum Osm — TTKG not valid (urine not concentrated)' };
+    const val = (urineK * serumOsm) / (serumK * urineOsm);
+    let interp;
+    if (val < 2) interp = 'Extrarenal K+ loss (appropriate renal conservation)';
+    else if (val <= 4) interp = 'Indeterminate — consider clinical context';
+    else interp = 'Inappropriate renal K+ wasting';
+    return { value: Math.round(val*10)/10, interpretation: interp };
+  },
+  urineKCreRatio(urineK, urineCr) {
+    if (!urineK||!urineCr) return null;
+    const ratioPerG = (urineK * 100) / urineCr;
+    let interp;
+    if (ratioPerG < 13) interp = 'Suggests extrarenal K+ loss (appropriate renal conservation)';
+    else interp = 'Suggests renal K+ wasting (inappropriate renal loss)';
+    return { value: Math.round(ratioPerG*10)/10, unit:'mEq/g Cr', interpretation: interp };
+  }
+};
+
+// ============================================================
+// HYPOKALEMIA — CLINICAL_HYPOK
+// ============================================================
+const CLINICAL_HYPOK = {
+  replacementProtocol(inp) {
+    const { K, weight, isAdult, severity, ecg, symptoms, eGFR, medications } = inp;
+    const hasDangerousECG = ecg.includes('vt_vf')||ecg.includes('av_block')||ecg.includes('qt_prolongation');
+    const hasRespFailure = symptoms.includes('resp_failure');
+    const hasParalysis = symptoms.includes('paralysis');
+    const hasDigoxin = medications.includes('digoxin');
+    const isCritical = severity.grade==='severe'||hasDangerousECG||hasRespFailure;
+    const isSymp = symptoms.length>0 && !symptoms.includes('asymptomatic');
+    let route, lineType, dose, rate, concentration, monitoring, alerts=[];
+    if (isCritical||hasParalysis) { route='Intravenous (Central line preferred)'; lineType='central'; }
+    else if (severity.grade==='moderate'&&isSymp) { route='Intravenous (Peripheral acceptable) or Oral if tolerating'; lineType='peripheral'; }
+    else { route='Oral (PO)'; lineType='oral'; }
+    if (lineType==='oral') {
+      if (isAdult) { dose='40-80 mEq KCl total daily, divided q4-6h (typical: 20-40 mEq per dose, 2-3 times daily)'; rate='N/A (oral administration)'; }
+      else { const lo=Math.min(Math.round(1.0*weight),40); const hi=Math.min(Math.round(2.0*weight),40); dose=`${lo}-${hi} mEq/dose PO q6h (1-2 mEq/kg/dose, max 40 mEq/dose)`; rate='N/A (oral administration)'; }
+      concentration='Liquid KCl preferred in pediatrics; tablets or powder in adults'; monitoring='Repeat BMP in 4-6 hours; then daily until stable';
+    } else if (lineType==='peripheral') {
+      if (isAdult) { dose='20-40 mEq IV per infusion'; rate='10 mEq/hr maximum via peripheral IV'; }
+      else { const pedRate=Math.min(Math.round(0.3*weight*10)/10,10); dose=`${Math.round(0.3*weight)}-${Math.round(0.5*weight)} mEq IV over 1-4 hours (0.3-0.5 mEq/kg/dose)`; rate=`${pedRate} mEq/hr (0.3 mEq/kg/hr, max 10 mEq/hr peripherally)`; }
+      concentration='Peripheral: ≤ 40 mEq/L (higher concentrations cause phlebitis)'; monitoring='Continuous cardiac monitoring; repeat electrolytes q2-4 hours';
+    } else {
+      if (isAdult) { dose='40-80 mEq IV replacement; titrate to response'; rate='20-40 mEq/hr via central line (up to 40 mEq/hr ONLY for life-threatening arrhythmia)'; }
+      else { const lo=Math.min(Math.round(0.3*weight*10)/10,10); const hi=Math.min(Math.round(0.5*weight*10)/10,20); dose=`${Math.round(0.3*weight)}-${Math.round(0.5*weight)} mEq IV; may repeat q4h with monitoring (0.3-0.5 mEq/kg/dose)`; rate=`${lo}-${hi} mEq/hr via central (0.5 mEq/kg/hr max; NEVER exceed 1 mEq/kg/hr)`; }
+      concentration='Central: ≤ 200 mEq/L; use dedicated lumen'; monitoring='Continuous cardiac monitoring MANDATORY; repeat BMP q1-2h; ICU setting required';
+    }
+    if (hasDigoxin) alerts.push({type:'critical',text:'DIGOXIN INTERACTION: Hypokalemia markedly potentiates digoxin toxicity. Maintain K+ > 4.0 mEq/L. Consider holding digoxin until K+ is normalized.'});
+    if (eGFR!==null && eGFR<30) alerts.push({type:'critical',text:'eGFR < 30 mL/min: Reduce replacement rate by 50%. High risk of hyperkalemia with aggressive replacement. Monitor q1h.'});
+    else if (eGFR!==null && eGFR<60) alerts.push({type:'warning',text:'eGFR 30-60 mL/min (moderate CKD): Reduce doses by 25-30%. Monitor q2h.'});
+    if (medications.includes('insulin')||medications.includes('beta_agonists')) alerts.push({type:'warning',text:'Redistribution agents active (insulin/beta-agonists): Excessive K+ replacement risks rebound hyperkalemia when the transcellular shift reverses.'});
+    return { route, lineType, dose, rate, concentration, monitoring, alerts };
+  },
+  mgManagement(Mg, K, weight, isAdult) {
+    if (!Mg) return { status:'not_entered', message:'Mg2+ not entered. Strongly recommend checking — hypomagnesemia causes refractory hypokalemia.' };
+    if (Mg<1.5) return { status:'low', message:'HYPOMAGNESEMIA DETECTED — Correct BEFORE or SIMULTANEOUSLY with K+ replacement.', rationale:'Mg2+ deficiency impairs ROMK channel function and Na-K-ATPase activity, causing obligatory renal K+ wasting. K+ replacement will be ineffective without Mg correction.', replacement: isAdult ? 'MgSO4 2g (16.2 mEq) IV over 20-60 min, then 4-6g over 24h if severe. Or Magnesium oxide 400-800 mg PO BID-TID for mild deficiency.' : 'MgSO4 25-50 mg/kg IV over 30-60 min (max 2g/dose). Oral: Magnesium oxide 10-20 mg/kg/day divided BID-TID.' };
+    if (Mg<2.0) return { status:'low_normal', message:'Mg2+ is low-normal. Consider oral supplementation concurrently with K+ replacement.', replacement:'Magnesium oxide 400-800 mg PO daily' };
+    return { status:'normal', message:'Mg2+ is within normal range.' };
+  },
+  differentialDx(inp) {
+    const { ttkg, urineKCr, acidBase, medications, symptoms } = inp;
+    const causes = { redistribution:[], renalLoss:[], extrarenalLoss:[], other:[] };
+    if (medications.includes('insulin')) causes.redistribution.push('Insulin-driven transcellular shift (activates Na-K-ATPase → K+ moves into cells)');
+    if (medications.includes('beta_agonists')) causes.redistribution.push('Beta-2 agonist effect (↑ cAMP → Na-K-ATPase activation → intracellular K+ shift)');
+    if (acidBase==='Metabolic Alkalosis'||acidBase==='Respiratory Alkalosis') causes.redistribution.push('Alkalemia: H+ exits cells in exchange for K+ entry (~0.4-0.6 mEq/L K+ drop per 0.1 pH unit rise)');
+    const isRenalLoss = (ttkg&&ttkg.value>4)||(urineKCr&&urineKCr.value>13);
+    if (isRenalLoss) {
+      if (medications.includes('loop_diuretics')) causes.renalLoss.push('Loop diuretics: Block NKCC2 in thick ascending limb → increased distal Na+ delivery → aldosterone-driven K+ secretion');
+      if (medications.includes('thiazides')) causes.renalLoss.push('Thiazide diuretics: Block NCC in distal convoluted tubule → same distal mechanism + concurrent Mg2+ wasting');
+      if (medications.includes('steroids')) causes.renalLoss.push('Mineralocorticoid excess: Activates ENaC → increased Na+ reabsorption → electrochemical K+ secretion via ROMK');
+      if (medications.includes('amphotericin_b')) causes.renalLoss.push('Amphotericin B: Creates membrane pores in collecting duct cells → direct K+ and Mg2+ leakage');
+      if (medications.includes('cisplatin')||medications.includes('aminoglycosides')) causes.renalLoss.push('Drug-induced tubular damage: Proximal tubule injury → Mg/K wasting');
+      if (acidBase==='Metabolic Alkalosis'&&!medications.includes('loop_diuretics')&&!medications.includes('thiazides')) {
+        causes.renalLoss.push('Consider primary hyperaldosteronism (Conn syndrome): HTN + hypoK + metabolic alkalosis triad');
+        causes.renalLoss.push('Bartter syndrome: Loop-diuretic phenotype, normotensive, elevated PGE2, hypercalciuria');
+        causes.renalLoss.push('Gitelman syndrome: Thiazide-phenotype, hypomagnesemia, hypocalciuria');
+      }
+      if (acidBase==='Metabolic Acidosis') {
+        causes.renalLoss.push('Renal Tubular Acidosis Type 1 (distal): Impaired H+ secretion, K+ wasting; urine pH persistently > 5.5');
+        causes.renalLoss.push('RTA Type 2 (proximal): HCO3 wasting with secondary K+ loss; urine pH variable');
+      }
+      if (causes.renalLoss.length===0) causes.renalLoss.push('Inappropriate renal K+ wasting detected — consider workup for hyperaldosteronism, Cushing syndrome, Liddle syndrome, or tubular disorders');
+    }
+    const isExtrarenalLoss = (ttkg&&ttkg.value!==null&&ttkg.value<2)||(urineKCr&&urineKCr.value<13);
+    if (isExtrarenalLoss||(!ttkg&&!urineKCr)) {
+      if (medications.includes('laxatives')) causes.extrarenalLoss.push('Laxative / enema use: Stool K+ content 20-50 mEq/L');
+      if (symptoms.includes('ileus')) causes.extrarenalLoss.push('GI losses: Vomiting causes direct K+ loss + metabolic alkalosis → secondary renal K+ loss; diarrhea/ileostomy fluid K+ 25-75 mEq/L');
+      causes.extrarenalLoss.push('Inadequate dietary intake / anorexia / malnutrition');
+      if (!ttkg&&!urineKCr) causes.other.push('Urine studies not available — cannot differentiate renal vs. extrarenal loss. Consider obtaining spot urine K+ and Cr.');
+    }
+    return causes;
+  },
+  clinicalPearls(inp) {
+    const pearls = [];
+    pearls.push({icon:'1',text:'Always correct Mg2+ BEFORE or SIMULTANEOUSLY with K+. Hypomagnesemia causes refractory hypokalemia by impairing ROMK channel closure (Huang & Kuo, JASN 2007).'});
+    pearls.push({icon:'2',text:'Peripheral IV rate limit: ≤ 10 mEq/hr at ≤ 40 mEq/L concentration. Higher concentrations cause phlebitis and pain.'});
+    pearls.push({icon:'3',text:'Central IV rate limit: ≤ 40 mEq/hr. Rates > 20 mEq/hr require ICU with continuous cardiac monitoring.'});
+    pearls.push({icon:'4',text:'Do NOT attempt full deficit correction in a single session. Serial monitoring with incremental replacement prevents hyperkalemia overshoot.'});
+    if (inp.medications.includes('digoxin')) pearls.push({icon:'!',text:'DIGOXIN + HYPOKALEMIA: Hypokalemia increases digoxin binding to Na-K-ATPase, potentiating toxicity. Target K+ > 4.0 mEq/L.'});
+    const highGlucose = inp.glucose&&inp.glucose>250;
+    const metAcidosis = inp.acidBase==='Metabolic Acidosis';
+    if (highGlucose&&metAcidosis) pearls.push({icon:'!',text:'DKA ALERT: In diabetic ketoacidosis, total body K+ is depleted despite potentially normal/high serum K+. Begin K+ replacement when K+ < 5.5 mEq/L and urine output is established. Do NOT start insulin if K+ < 3.5 mEq/L.'});
+    pearls.push({icon:'5',text:'Refeeding syndrome risk: In malnourished patients, carbohydrate reintroduction drives insulin secretion → K+, Mg2+, and PO4 shift intracellularly. Monitor all three electrolytes.'});
+    pearls.push({icon:'6',text:'For Bartter/Gitelman syndromes: K+-sparing diuretics (amiloride 5-20 mg/day or spironolactone 25-100 mg/day) are first-line along with oral KCl supplementation.'});
+    pearls.push({icon:'7',text:'Pediatric safety: Never exceed 1 mEq/kg/hr IV rate. Use infusion pumps only. Always use dilute solutions via peripheral lines.'});
+    return pearls;
+  }
+};
+
+// ============================================================
+// HYPOKALEMIA — RENDER_HYPOK
+// ============================================================
+const RENDER_HYPOK = {
+  severityCard(data) {
+    const { severity, K } = data;
+    const pulseClass = severity.grade==='severe' ? 'severe-pulse' : '';
+    return `<div class="card-print rounded-xl border-2 p-5 ${severity.css} ${pulseClass}">
+      <div class="flex items-center justify-between"><div><div class="text-3xl font-bold">${K.toFixed(1)} mEq/L</div><div class="text-lg font-semibold mt-1">${severity.label}</div></div><div class="text-right"><div class="text-5xl font-black opacity-20">K+</div></div></div>
+      <p class="mt-3 text-sm font-medium">${severity.urgency}</p>
+      ${severity.grade!=='normal'&&data.escalated ? '<p class="mt-2 text-sm font-bold">⚠ ESCALATED due to dangerous ECG findings or respiratory failure</p>' : ''}
+    </div>`;
+  },
+  deficitCard(data) {
+    if (!data.deficit) return '<div class="card-print rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-700">K+ is within normal range. No deficit to calculate.</div>';
+    const d = data.deficit;
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>Estimated Potassium Deficit</h3>
+      <div class="bg-slate-50 rounded-lg p-4 mb-3"><div class="grid grid-cols-3 gap-4 text-center">
+        <div><div class="text-xs text-slate-500 mb-1">Lower Estimate</div><div class="text-2xl font-bold text-blue-700">${d.low}</div><div class="text-xs text-slate-400">mEq</div></div>
+        <div class="border-x border-slate-200"><div class="text-xs text-slate-500 mb-1">Upper Estimate</div><div class="text-2xl font-bold text-orange-600">${d.high}</div><div class="text-xs text-slate-400">mEq</div></div>
+        <div><div class="text-xs text-slate-500 mb-1">K+ Gap</div><div class="text-2xl font-bold text-slate-700">${(3.5-data.K).toFixed(1)}</div><div class="text-xs text-slate-400">mEq/L below 3.5</div></div>
+      </div></div>
+      <p class="text-xs text-slate-500"><strong>Method:</strong> ${d.method}</p>
+      <p class="text-xs text-slate-500 mt-1">${d.note}</p>
+      <div class="alert-warning rounded-lg p-3 mt-3"><p class="text-xs text-amber-800 font-medium">Estimates are approximate. Titrate replacement to serial serum K+ values, not to a calculated target dose.</p></div>
+    </div>`;
+  },
+  protocolCard(data) {
+    const p = data.protocol;
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">3</span>Replacement Protocol</h3>
+      <div class="space-y-3">
+        <div class="bg-blue-50 rounded-lg p-3"><div class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Route</div><div class="text-sm font-semibold text-blue-900">${p.route}</div></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Dose</div><div class="text-sm text-slate-800">${p.dose}</div></div>
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Rate</div><div class="text-sm text-slate-800">${p.rate}</div></div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Concentration</div><div class="text-sm text-slate-800">${p.concentration}</div></div>
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Monitoring</div><div class="text-sm text-slate-800">${p.monitoring}</div></div>
+        </div>
+        ${p.alerts.map(a=>`<div class="alert-${a.type} rounded-lg p-3"><p class="text-sm font-medium">${a.text}</p></div>`).join('')}
+      </div>
+    </div>`;
+  },
+  electrolyteCard(data) {
+    const mg = data.mgStatus;
+    const mgCC = mg.status==='low'?'bg-red-50 border-red-200':mg.status==='low_normal'?'bg-amber-50 border-amber-200':mg.status==='not_entered'?'bg-slate-50 border-slate-200':'bg-emerald-50 border-emerald-200';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">4</span>Concurrent Electrolyte Management</h3>
+      <div class="${mgCC} border rounded-lg p-4 mb-3">
+        <p class="font-semibold text-sm mb-1">Magnesium (Mg2+)</p><p class="text-sm">${mg.message}</p>
+        ${mg.rationale?`<p class="text-xs mt-2 text-slate-600"><strong>Rationale:</strong> ${mg.rationale}</p>`:''}
+        ${mg.replacement?`<p class="text-xs mt-1 text-slate-600"><strong>Replacement:</strong> ${mg.replacement}</p>`:''}
+      </div>
+      ${data.Ca?`<div class="${data.Ca<8.5?'bg-amber-50 border-amber-200':'bg-emerald-50 border-emerald-200'} border rounded-lg p-3"><p class="text-sm"><strong>Calcium:</strong> ${data.Ca} mg/dL ${data.Ca<8.5?'— Low. Check PTH, albumin-corrected Ca. Hypomagnesemia suppresses PTH.':'— Normal range.'}</p></div>`:''}
+    </div>`;
+  },
+  ddxCard(data) {
+    const c = data.ddx;
+    const rl = (title,items,color) => { if(!items.length) return ''; return `<div class="mb-3"><h4 class="font-semibold text-sm text-${color}-700 mb-2">${title}</h4><ul class="space-y-1.5">${items.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-${color}-300">${i}</li>`).join('')}</ul></div>`; };
+    let ttkgBox='';
+    if (data.ttkg) {
+      if (data.ttkg.error) ttkgBox=`<div class="alert-warning rounded-lg p-3 mb-3"><p class="text-sm">${data.ttkg.error}</p></div>`;
+      else if (data.ttkg.value!==null) ttkgBox=`<div class="bg-slate-50 rounded-lg p-3 mb-3"><div class="flex items-center gap-4"><div><span class="text-xs text-slate-500">TTKG</span><div class="text-xl font-bold text-slate-800">${data.ttkg.value}</div></div><div class="text-sm text-slate-600">${data.ttkg.interpretation}</div></div><p class="text-[11px] text-slate-400 mt-1">TTKG = (Urine K+ x Serum Osm) / (Serum K+ x Urine Osm). &lt;2 = extrarenal; &gt;4 = renal wasting.</p></div>`;
+    }
+    let ukcrBox='';
+    if (data.urineKCr) ukcrBox=`<div class="bg-slate-50 rounded-lg p-3 mb-3"><div class="flex items-center gap-4"><div><span class="text-xs text-slate-500">Urine K+/Cr ratio</span><div class="text-xl font-bold text-slate-800">${data.urineKCr.value} ${data.urineKCr.unit}</div></div><div class="text-sm text-slate-600">${data.urineKCr.interpretation}</div></div><p class="text-[11px] text-slate-400 mt-1">Cut-off: &lt;13 mEq/g = extrarenal; ≥13 mEq/g = renal loss (Kamel, Kidney Int 2011).</p></div>`;
+    let abBox='';
+    if (data.acidBase&&data.acidBase!=='Normal pH') {
+      const abC={'Metabolic Alkalosis':'blue','Metabolic Acidosis':'orange','Respiratory Alkalosis':'cyan','Respiratory Acidosis':'purple'};
+      const cc=abC[data.acidBase]||'slate';
+      abBox=`<div class="bg-${cc}-50 border border-${cc}-200 rounded-lg p-3 mb-3"><p class="text-sm font-semibold text-${cc}-800">Acid-Base: ${data.acidBase}</p></div>`;
+    }
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">5</span>Differential Diagnosis Workup</h3>
+      ${ttkgBox}${ukcrBox}${abBox}
+      ${rl('Redistribution (Transcellular Shift)',c.redistribution,'purple')}
+      ${rl('Renal K+ Wasting',c.renalLoss,'red')}
+      ${rl('Extrarenal K+ Loss',c.extrarenalLoss,'amber')}
+      ${c.other.length>0?rl('Notes',c.other,'slate'):''}
+    </div>`;
+  },
+  pathoCard() {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+      <button onclick="toggleSection('hk-patho-body')" class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">6</span>Pathophysiology (Educational)</h3>
+        <svg id="chev-hk-patho-body" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="hk-patho-body" class="collapsible-body px-5 pb-5"><div class="space-y-4">
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Normal K+ Homeostasis</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2"><p><strong>Internal Balance:</strong> 98% of total body K+ (~3,500 mEq) is intracellular (ICF ~140 mEq/L; ECF ~4.0 mEq/L). The Na-K-ATPase pump actively maintains this 35:1 gradient.</p><p><strong>Shift INTO cells (↓ serum K+):</strong> Insulin, beta-2 catecholamines, alkalemia, hypothermia.</p><p><strong>Shift OUT of cells (↑ serum K+):</strong> Acidemia, cell lysis, hyperosmolality, exercise.</p><p><strong>External Balance:</strong> Daily intake ~50-150 mEq. Renal excretion handles ~90%; GI handles ~10%. Regulated by aldosterone via ROMK and BK channels.</p></div></div>
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Why Hypokalemia Causes ECG Changes</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2"><p>Hypokalemia <strong>hyperpolarizes</strong> the resting membrane potential (more negative than normal -90 mV).</p><p><strong>U waves:</strong> Delayed repolarization of Purkinje fibers or mid-myocardial M cells. Best seen in V2-V3.</p><p><strong>T wave flattening & QT prolongation:</strong> Delayed phase 3 repolarization due to reduced outward K+ current (IKr).</p><p><strong>Arrhythmias (K+ < 2.5):</strong> EADs and DADs → PVCs, ventricular tachycardia, torsades de pointes, VF.</p></div></div>
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Mg-K Interaction</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2"><p>Intracellular Mg2+ normally <strong>blocks the ROMK channel</strong>, limiting K+ secretion into the tubular lumen.</p><p>When Mg2+ is depleted → ROMK becomes unblocked → <strong>unrestrained renal K+ wasting</strong> that cannot be corrected by K+ supplementation alone.</p><p><em>Reference: Huang CL, Kuo E. JASN 2007;18:2649-2652.</em></p></div></div>
+      </div></div>
+    </div>`;
+  },
+  pearlsCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">7</span>Clinical Pearls &amp; Safety Alerts</h3>
+      <div class="space-y-2">${data.pearls.map(p=>`<div class="${p.icon==='!'?'alert-critical':'alert-info'} rounded-lg p-3"><div class="flex gap-3"><span class="flex-shrink-0 w-6 h-6 ${p.icon==='!'?'bg-red-600':'bg-blue-600'} text-white rounded-full flex items-center justify-center text-xs font-bold">${p.icon}</span><p class="text-sm text-slate-700">${p.text}</p></div></div>`).join('')}</div>
+    </div>`;
+  },
+  referencesCard() {
+    const refs = [
+      'Sterns RH, Cox M, Feig PU, Singer I. Internal potassium balance and the control of the plasma potassium concentration. <em>Medicine (Baltimore)</em>. 1981;60(5):339-354.',
+      'Weiner ID, Wingo CS. Hypokalemia — consequences, causes, and correction. <em>J Am Soc Nephrol</em>. 1997;8(7):1179-1188.',
+      'Palmer BF, Clegg DJ. Physiology and Pathophysiology of Potassium Homeostasis: Core Curriculum 2019. <em>Am J Kidney Dis</em>. 2019;74(5):682-695.',
+      'Kardalas E, Paschou SA, et al. Hypokalemia: a clinical update. <em>Endocr Connect</em>. 2018;7(4):R135-R146.',
+      'Huang CL, Kuo E. Mechanism of hypokalemia in magnesium deficiency. <em>J Am Soc Nephrol</em>. 2007;18(10):2649-2652.',
+      'Greenbaum LA. Electrolyte and Acid-Base Disorders. In: <em>Nelson Textbook of Pediatrics</em>. 21st ed. Elsevier; 2020: Chapter 68.',
+      'Schwartz GJ, et al. New equations to estimate GFR in children with CKD. <em>J Am Soc Nephrol</em>. 2009;20(3):629-637.',
+      'Inker LA, et al. New creatinine- and cystatin C-based equations to estimate GFR without race. <em>N Engl J Med</em>. 2021;385(19):1737-1749.',
+      'Kamel KS, et al. Urine electrolytes and osmolality: when and how to use them. <em>Am J Nephrol</em>. 1990;10(2):89-102.',
+      'Schaefer TJ, Wolford RW. Disorders of potassium. <em>Emerg Med Clin North Am</em>. 2005;23(3):723-747.',
+      'Marti G, et al. Hypokalemia clinical guidelines. <em>Swiss Med Wkly</em>. 2022;152:w30128.'
+    ];
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">8</span>References</h3>
+      <ol class="space-y-2 list-decimal list-inside">${refs.map(r=>`<li class="text-xs text-slate-600 leading-relaxed">${r}</li>`).join('')}</ol>
+    </div>`;
+  }
+};
+
+// ============================================================
+// HYPOKALEMIA — calcHypoK main function
+// ============================================================
+function calcHypoK() {
+  const demo = getDemo();
+  const K = parseFloat(document.getElementById('hk-K').value);
+  const Na = parseFloat(document.getElementById('hk-Na').value)||null;
+  const Mg = parseFloat(document.getElementById('hk-Mg').value)||null;
+  const Ca = parseFloat(document.getElementById('hk-Ca').value)||null;
+  const glucose = parseFloat(document.getElementById('hk-glucose').value)||null;
+  const BUN = parseFloat(document.getElementById('hk-BUN').value)||null;
+  const serumOsmInput = parseFloat(document.getElementById('hk-serum-osm').value)||null;
+  const pH = parseFloat(document.getElementById('hk-pH').value)||null;
+  const HCO3 = parseFloat(document.getElementById('hk-HCO3').value)||null;
+  const pCO2 = parseFloat(document.getElementById('hk-pCO2').value)||null;
+  const Cr = parseFloat(document.getElementById('hk-Cr').value)||null;
+  const eGFRInput = parseFloat(document.getElementById('hk-eGFR').value)||null;
+  const urineK = parseFloat(document.getElementById('hk-urine-K').value)||null;
+  const urineCr = parseFloat(document.getElementById('hk-urine-Cr').value)||null;
+  const urineNa = parseFloat(document.getElementById('hk-urine-Na').value)||null;
+  const urineOsm = parseFloat(document.getElementById('hk-urine-osm').value)||null;
+  const ecg = [...document.querySelectorAll('input[name="hk-ecg"]:checked')].map(el=>el.value);
+  const symptoms = [...document.querySelectorAll('input[name="hk-sym"]:checked')].map(el=>el.value);
+  const medications = [...document.querySelectorAll('input[name="hk-med"]:checked')].map(el=>el.value);
+
+  // Validate
+  const errors = [];
+  if (!K||K<0.5||K>8.0) errors.push('Serum K+ is required (valid range: 0.5-8.0 mEq/L)');
+  if (!demo.weight||demo.weight<0.5||demo.weight>400) errors.push('Patient weight is required (valid range: 0.5-400 kg)');
+  if (errors.length) {
+    document.getElementById('errors-hypoK').classList.remove('hidden');
+    document.getElementById('error-list-hypoK').innerHTML = errors.map(e=>`<li>${e}</li>`).join('');
+    return;
+  }
+  document.getElementById('errors-hypoK').classList.add('hidden');
+
+  // Derived
+  const serumOsm = serumOsmInput || SHARED.serumOsm(Na, glucose, BUN);
+  let eGFR = eGFRInput;
+  if (!eGFR && Cr) eGFR = demo.isPed ? SHARED.eGFR_Schwartz(Cr, demo.height) : SHARED.eGFR_CKDEPI(Cr, demo.ageYears, demo.sex);
+
+  const severity = CALC_HYPOK.severity(K);
+  const hasDangerousECG = ecg.includes('vt_vf')||ecg.includes('av_block')||ecg.includes('qt_prolongation');
+  const hasRespFailure = symptoms.includes('resp_failure');
+  const escalated = (severity.grade==='moderate'||severity.grade==='mild')&&(hasDangerousECG||hasRespFailure);
+  const effectiveSeverity = escalated ? CALC_HYPOK.severity(2.4) : severity;
+
+  const deficit = CALC_HYPOK.kDeficit(K, demo.weight, demo.isAdult);
+  const ttkg = CALC_HYPOK.TTKG(urineK, K, urineOsm, serumOsm);
+  const urineKCr = CALC_HYPOK.urineKCreRatio(urineK, urineCr);
+  const acidBase = SHARED.acidBase(pH, HCO3, pCO2);
+
+  const protocol = CLINICAL_HYPOK.replacementProtocol({ K, weight:demo.weight, isAdult:demo.isAdult, severity:escalated?effectiveSeverity:severity, ecg, symptoms, eGFR, medications });
+  const mgStatus = CLINICAL_HYPOK.mgManagement(Mg, K, demo.weight, demo.isAdult);
+  const ddx = CLINICAL_HYPOK.differentialDx({ ttkg, urineKCr, acidBase, medications, symptoms });
+  const pearls = CLINICAL_HYPOK.clinicalPearls({ medications, glucose, acidBase });
+
+  // Render
+  document.getElementById('card-hk-severity').innerHTML = RENDER_HYPOK.severityCard({ severity:escalated?{...effectiveSeverity,label:severity.label+' (ESCALATED)'}:severity, K, escalated });
+  document.getElementById('card-hk-deficit').innerHTML = RENDER_HYPOK.deficitCard({ deficit, K });
+  document.getElementById('card-hk-protocol').innerHTML = RENDER_HYPOK.protocolCard({ protocol });
+  document.getElementById('card-hk-electrolyte').innerHTML = RENDER_HYPOK.electrolyteCard({ mgStatus, Ca });
+  document.getElementById('card-hk-ddx').innerHTML = RENDER_HYPOK.ddxCard({ ddx, ttkg, urineKCr, acidBase });
+  document.getElementById('card-hk-patho').innerHTML = RENDER_HYPOK.pathoCard();
+  document.getElementById('card-hk-pearls').innerHTML = RENDER_HYPOK.pearlsCard({ pearls });
+  document.getElementById('card-hk-refs').innerHTML = RENDER_HYPOK.referencesCard();
+
+  document.getElementById('results-content-hypoK').classList.remove('hidden');
+  document.getElementById('placeholder-hypoK').classList.add('hidden');
+
+  const badge = document.getElementById('header-badge');
+  badge.className = `px-3 py-1 rounded-full text-xs font-bold border-2 ${severity.css}`;
+  badge.textContent = `K+ ${K.toFixed(1)}`;
+  badge.classList.remove('hidden');
+
+  if (window.innerWidth<1024) document.getElementById('results-hypoK').scrollIntoView({behavior:'smooth'});
+}
+
+// ============================================================
+// HYPERKALEMIA — CALC_HYPERK, CLINICAL_HYPERK, RENDER_HYPERK
+// ============================================================
+const CALC_HYPERK = {
+  severity(K, ecg) {
+    const hasECG = ecg && ecg.length > 0;
+    const hasSevereECG = ecg && (ecg.includes('wide_qrs')||ecg.includes('sine_wave')||ecg.includes('vt_vf'));
+    if (hasSevereECG || K >= 6.5) return { grade:'severe', label:'Severe Hyperkalemia', css:'sev-severe', urgency:'EMERGENCY: Life-threatening. Immediate treatment required. ICU admission.' };
+    if (K >= 6.0 || (K >= 5.5 && hasECG)) return { grade:'moderate', label:'Moderate Hyperkalemia', css:'sev-moderate', urgency:'Urgent treatment needed. Cardiac monitoring mandatory.' };
+    if (K >= 5.5) return { grade:'mild', label:'Mild Hyperkalemia', css:'sev-mild', urgency:'Monitor closely. Address underlying cause. Dietary counseling.' };
+    if (K > 5.0) return { grade:'mild', label:'Borderline Hyperkalemia', css:'sev-mild', urgency:'Recheck level. Consider pseudohyperkalemia if asymptomatic.' };
+    return { grade:'normal', label:'Normal K+', css:'sev-normal', urgency:'K+ within normal range.' };
+  }
+};
+
+const CLINICAL_HYPERK = {
+  emergencyProtocol(inp) {
+    const { K, weight, isAdult, isPed, severity, ecg, context, medications, pH, HCO3, eGFR, urineOutput } = inp;
+    const hasSevereECG = ecg.includes('wide_qrs')||ecg.includes('sine_wave')||ecg.includes('vt_vf');
+    const isEmergency = severity.grade==='severe'||hasSevereECG;
+    const phases = [];
+
+    // Phase 1: Membrane Stabilization
+    if (isEmergency) {
+      const caDose = isAdult
+        ? { drug:'Calcium Gluconate 10%', dose:'20 mL (2 amps) IV over 2-3 min', repeat:'May repeat in 5 min if ECG unchanged', note:'Onset: 1-3 min. Duration: 30-60 min. Does NOT lower K+, stabilizes myocardium.' }
+        : { drug:'Calcium Gluconate 10%', dose:`${Math.round(0.5*weight*10)/10} mL (0.5 mL/kg, max 20 mL) IV over 5-10 min`, repeat:'May repeat once in 10 min', note:'Use calcium gluconate (NOT chloride) peripherally. CaCl only via central line.' };
+      if (medications.includes('digoxin')) caDose.warning = 'CAUTION: Calcium may potentiate digoxin toxicity. Use only if life-threatening arrhythmia. Consider digoxin-specific Fab fragments.';
+      phases.push({ name:'Phase 1: Membrane Stabilization', color:'red', items:[caDose] });
+    }
+
+    // Phase 2: Redistribution (shift K+ intracellularly)
+    const redistItems = [];
+    // Insulin + dextrose
+    if (isAdult) {
+      redistItems.push({ drug:'Regular Insulin + Dextrose', dose:'Insulin 10 units IV push + D50W 25g (50 mL) IV', onset:'15-30 min', duration:'4-6 hr', note:'Expected ↓ K+ by 0.5-1.2 mEq/L. Monitor glucose q1h × 6h (late hypoglycemia risk).' });
+    } else {
+      const insulinDose = Math.round(0.1*weight*10)/10;
+      const dexDose = Math.round(0.5*weight*10)/10;
+      redistItems.push({ drug:'Regular Insulin + Dextrose', dose:`Insulin ${insulinDose} U/kg (max 10 U) IV + D25W ${dexDose} g/kg IV`, onset:'15-30 min', duration:'4-6 hr', note:'Monitor glucose q30min × 4h. If glucose > 250 mg/dL, may give insulin without dextrose.' });
+    }
+    // Albuterol
+    redistItems.push({ drug:'Albuterol (nebulized)', dose: isAdult ? '10-20 mg nebulized over 10 min' : `${Math.min(Math.round(0.3*weight*10)/10,10)} mg nebulized (0.3 mg/kg, max 10 mg)`, onset:'15-30 min', duration:'2-4 hr', note:'Expected ↓ K+ by 0.5-1.0 mEq/L. Additive with insulin/dextrose. Caution: tachycardia.' });
+    // NaHCO3 if acidotic
+    if (pH && pH < 7.35) {
+      redistItems.push({ drug:'Sodium Bicarbonate', dose: isAdult ? '50-100 mEq (1-2 amps 8.4%) IV over 5 min' : `${Math.round(1*weight)} mEq (1 mEq/kg) IV over 5-10 min`, onset:'15-30 min', duration:'1-2 hr', note:'Most effective when pH < 7.2. Minimal effect if pH normal. Avoid if volume overloaded.' });
+    }
+    if (redistItems.length) phases.push({ name:'Phase 2: Redistribution (Intracellular Shift)', color:'amber', items:redistItems });
+
+    // Phase 3: Elimination
+    const elimItems = [];
+    if (eGFR && eGFR > 15 && urineOutput !== 'anuric') {
+      elimItems.push({ drug:'Furosemide', dose: isAdult ? '40-80 mg IV' : `${Math.round(1*weight)} mg IV (1 mg/kg, max 80 mg)`, onset:'15-30 min', duration:'6 hr', note:'Enhances renal K+ excretion. Ensure adequate volume status. Replace fluid losses as needed.' });
+    }
+    elimItems.push({ drug:'Sodium Polystyrene Sulfonate (Kayexalate)', dose: isAdult ? '15-30g PO in sorbitol or 30-50g PR' : `${Math.round(1*weight)} g/dose PO/PR (1 g/kg, max 30g)`, onset:'1-2 hr (PO), 30-60 min (PR)', duration:'4-6 hr', note:'Expected ↓ K+ by 0.5-1.0 mEq/L per dose. Avoid in post-op ileus (bowel necrosis risk). FDA black box warning re: intestinal necrosis.' });
+    elimItems.push({ drug:'Patiromer (Veltassa)', dose:'8.4 g PO once daily', onset:'4-7 hr', duration:'Long-acting', note:'For non-emergent hyperkalemia management. Do not use for acute/life-threatening hyperkalemia. Separate from other oral medications by 3 hours.' });
+    elimItems.push({ drug:'Sodium Zirconium Cyclosilicate (Lokelma)', dose: isAdult ? '10 g PO TID × 48h, then 5-10 g daily' : 'Not established in pediatrics', onset:'1-2 hr', duration:'Long-acting', note:'Faster onset than Patiromer. Can be used acutely. Expected ↓ K+ by 0.7 mEq/L in 1 hr.' });
+    phases.push({ name:'Phase 3: Elimination (Remove K+ from Body)', color:'teal', items:elimItems });
+
+    return { phases, isEmergency };
+  },
+  dialysisDecision(inp) {
+    const { K, eGFR, urineOutput, context } = inp;
+    const indications = [];
+    if (K >= 6.5) indications.push('K+ ≥ 6.5 mEq/L refractory to medical therapy');
+    if (urineOutput === 'anuric') indications.push('Anuria — cannot excrete K+ renally');
+    if (urineOutput === 'oliguric' && eGFR && eGFR < 15) indications.push('Severe oliguria with eGFR < 15 mL/min');
+    if (context.includes('ckd') || context.includes('on_dialysis')) indications.push('ESRD / current dialysis patient');
+    if (context.includes('tumor_lysis')) indications.push('Tumor lysis syndrome with refractory hyperkalemia');
+    const needsDialysis = indications.length >= 2 || K >= 7.0 || (K >= 6.5 && urineOutput === 'anuric');
+    return { needsDialysis, indications, note: needsDialysis ? 'Hemodialysis removes 25-50 mEq K+ per hour. Expect 1-1.5 mEq/L reduction per hour. Post-dialysis rebound common — recheck in 2-4 hours.' : 'Dialysis not immediately indicated. Continue medical management and reassess.' };
+  },
+  differentialDx(inp) {
+    const { context, medications, acidBase } = inp;
+    const causes = { decreased_excretion:[], increased_release:[], transcellular_shift:[], pseudohyperK:[], drug_induced:[] };
+    // Decreased excretion
+    if (inp.eGFR && inp.eGFR < 30) causes.decreased_excretion.push('Advanced CKD (eGFR < 30): Impaired distal K+ secretion');
+    if (context.includes('ckd')) causes.decreased_excretion.push('CKD: Progressive loss of nephron mass → reduced K+ excretory capacity');
+    if (context.includes('adrenal_insuff')) causes.decreased_excretion.push('Adrenal insufficiency: ↓ aldosterone → ↓ ENaC activity → ↓ K+ secretion');
+    if (inp.urineOutput === 'oliguric' || inp.urineOutput === 'anuric') causes.decreased_excretion.push('Acute kidney injury with oliguria/anuria');
+    // Increased release
+    if (context.includes('tumor_lysis')) causes.increased_release.push('Tumor lysis syndrome: Massive cell death → K+ release + phosphate + uric acid');
+    if (context.includes('rhabdo')) causes.increased_release.push('Rhabdomyolysis: Skeletal muscle breakdown → K+, myoglobin, CK release');
+    if (context.includes('burns')) causes.increased_release.push('Burns / crush injury: Direct tissue destruction → K+ release');
+    // Transcellular shift
+    if (acidBase === 'Metabolic Acidosis') causes.transcellular_shift.push('Metabolic acidosis: H+ enters cells, K+ exits to maintain electroneutrality (~0.6 mEq/L rise per 0.1 pH drop for mineral acidoses)');
+    if (medications.includes('beta_blockers')) causes.transcellular_shift.push('Beta-blocker: Impairs beta-2 mediated cellular K+ uptake');
+    if (medications.includes('digoxin')) causes.transcellular_shift.push('Digoxin toxicity: Inhibits Na-K-ATPase → K+ remains extracellular');
+    if (medications.includes('succinylcholine')) causes.transcellular_shift.push('Succinylcholine: Depolarizes skeletal muscle → K+ efflux (especially dangerous in burns, denervation, immobilization)');
+    // Pseudohyperkalemia
+    if (context.includes('hemolysis')) causes.pseudohyperK.push('Hemolysis: In vitro RBC lysis releases intracellular K+. Recheck with careful venipuncture and rapid processing.');
+    causes.pseudohyperK.push('Consider: Tourniquet use, fist clenching, difficult draw, thrombocytosis (plt > 500K), severe leukocytosis');
+    // Drug-induced
+    if (medications.includes('acei_arb')) causes.drug_induced.push('ACEi/ARB: ↓ angiotensin II → ↓ aldosterone → ↓ K+ excretion');
+    if (medications.includes('k_sparing')) causes.drug_induced.push('K+-sparing diuretics: Block ENaC (amiloride, triamterene) or MR (spironolactone, eplerenone) → ↓ K+ secretion');
+    if (medications.includes('nsaids')) causes.drug_induced.push('NSAIDs: ↓ PGE2 → ↓ renin → ↓ aldosterone (hyporeninemic hypoaldosteronism)');
+    if (medications.includes('tmp_smx')) causes.drug_induced.push('TMP-SMX: Trimethoprim blocks ENaC (amiloride-like effect). Risk increases with CKD.');
+    if (medications.includes('heparin')) causes.drug_induced.push('Heparin: Inhibits aldosterone synthesis');
+    if (medications.includes('calcineurin')) causes.drug_induced.push('Calcineurin inhibitors: ↓ ROMK activity + ↓ aldosterone responsiveness');
+    return causes;
+  },
+  clinicalPearls(inp) {
+    const pearls = [];
+    pearls.push({icon:'1',text:'Calcium does NOT lower K+. It stabilizes the myocardium by restoring the resting membrane potential gradient. Its effect lasts only 30-60 minutes.'});
+    pearls.push({icon:'2',text:'Insulin + glucose is the most reliable redistribution strategy. Always co-administer dextrose to prevent hypoglycemia. Monitor glucose q1h × 6 hours.'});
+    pearls.push({icon:'3',text:'ECG changes do NOT reliably correlate with K+ level. Some patients have cardiac arrest at K+ 6.0; others tolerate 8.0+. Treat the patient, not the number.'});
+    pearls.push({icon:'4',text:'Post-dialysis K+ rebound: 30-50% of removed K+ redistributes from ICF within 2-4 hours. Always recheck after dialysis.'});
+    if (inp.context.includes('tumor_lysis')) pearls.push({icon:'!',text:'TUMOR LYSIS: Rasburicase for uric acid. Aggressive hydration (3 L/m²/day). Avoid allopurinol with rasburicase. Monitor q4-6h.'});
+    if (inp.medications.includes('digoxin')) pearls.push({icon:'!',text:'DIGOXIN + HYPERKALEMIA: Both inhibit Na-K-ATPase synergistically. Give calcium cautiously. Consider Digibind (digoxin-specific Fab).'});
+    pearls.push({icon:'5',text:'Kayexalate onset is 1-2h PO, 30-60 min PR. Lokelma (SZC) works faster (~1h). Neither is appropriate as sole therapy for acute severe hyperkalemia.'});
+    pearls.push({icon:'6',text:'Pediatric caution: Use calcium gluconate (NOT chloride) via peripheral line. CaCl 10% provides 3× more Ca²+ but is extremely caustic if extravasated.'});
+    return pearls;
+  }
+};
+
+const RENDER_HYPERK = {
+  severityCard(data) {
+    const { severity, K } = data;
+    const pulseClass = severity.grade==='severe' ? 'severe-pulse' : '';
+    return `<div class="card-print rounded-xl border-2 p-5 ${severity.css} ${pulseClass}">
+      <div class="flex items-center justify-between"><div><div class="text-3xl font-bold">${K.toFixed(1)} mEq/L</div><div class="text-lg font-semibold mt-1">${severity.label}</div></div><div class="text-right"><div class="text-5xl font-black opacity-20">K+↑</div></div></div>
+      <p class="mt-3 text-sm font-medium">${severity.urgency}</p>
+    </div>`;
+  },
+  emergencyCard(data) {
+    const { phases, isEmergency } = data;
+    if (!isEmergency && phases.length < 2) return '';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>Emergency Protocol</h3>
+      <div class="space-y-4">${phases.map(ph=>`
+        <div><h4 class="font-semibold text-sm text-${ph.color}-700 mb-2 uppercase tracking-wide">${ph.name}</h4>
+          <div class="space-y-2">${ph.items.map(it=>`
+            <div class="bg-${ph.color}-50 border border-${ph.color}-200 rounded-lg p-3">
+              <div class="font-semibold text-sm text-${ph.color}-900">${it.drug}</div>
+              <div class="text-sm mt-1"><strong>Dose:</strong> ${it.dose}</div>
+              ${it.onset?`<div class="text-xs text-slate-600 mt-1"><strong>Onset:</strong> ${it.onset} | <strong>Duration:</strong> ${it.duration}</div>`:''}
+              ${it.repeat?`<div class="text-xs text-slate-600"><strong>Repeat:</strong> ${it.repeat}</div>`:''}
+              <div class="text-xs text-slate-500 mt-1">${it.note}</div>
+              ${it.warning?`<div class="alert-critical rounded p-2 mt-2 text-xs font-medium">${it.warning}</div>`:''}
+            </div>`).join('')}
+        </div>`).join('')}
+      </div>
+    </div>`;
+  },
+  dialysisCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">4</span>Dialysis Decision</h3>
+      <div class="${data.needsDialysis?'bg-red-50 border-red-200':'bg-emerald-50 border-emerald-200'} border rounded-lg p-4 mb-3">
+        <p class="font-semibold text-sm">${data.needsDialysis?'DIALYSIS RECOMMENDED':'Dialysis Not Immediately Required'}</p>
+        <p class="text-sm mt-1">${data.note}</p>
+      </div>
+      ${data.indications.length?`<div class="mt-3"><p class="text-xs font-semibold text-slate-600 mb-2">Indications present:</p><ul class="space-y-1">${data.indications.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-red-300">${i}</li>`).join('')}</ul></div>`:''}
+    </div>`;
+  },
+  ddxCard(data) {
+    const c = data.ddx;
+    const rl = (title,items,color) => { if(!items.length) return ''; return `<div class="mb-3"><h4 class="font-semibold text-sm text-${color}-700 mb-2">${title}</h4><ul class="space-y-1.5">${items.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-${color}-300">${i}</li>`).join('')}</ul></div>`; };
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">5</span>Differential Diagnosis</h3>
+      ${rl('Decreased Renal Excretion',c.decreased_excretion,'red')}
+      ${rl('Increased Cellular Release',c.increased_release,'orange')}
+      ${rl('Transcellular Shift',c.transcellular_shift,'purple')}
+      ${rl('Pseudohyperkalemia',c.pseudohyperK,'slate')}
+      ${rl('Drug-Induced',c.drug_induced,'amber')}
+    </div>`;
+  },
+  pathoCard() {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+      <button onclick="toggleSection('hpk-patho-body')" class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2"><span class="w-6 h-6 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">6</span>Pathophysiology</h3>
+        <svg id="chev-hpk-patho-body" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="hpk-patho-body" class="collapsible-body px-5 pb-5"><div class="space-y-4">
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Hyperkalemia & Cardiac Conduction</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2">
+          <p>Hyperkalemia <strong>depolarizes</strong> the resting membrane potential (less negative → closer to threshold). This partially inactivates Na+ channels → slower conduction → widened QRS.</p>
+          <p><strong>ECG Progression:</strong> Peaked T (>5.5) → Flattened P + PR prolongation (>6.5) → Widened QRS (>7.0) → Sine wave → VF/Asystole.</p>
+          <p><strong>Why Ca2+ works:</strong> Ca2+ raises the threshold potential, restoring the gap between resting and threshold → stabilizes conduction without lowering K+.</p>
+        </div></div>
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">K+ Homeostasis in CKD</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2">
+          <p>As nephron mass decreases, remaining nephrons upregulate K+ excretion via aldosterone-stimulated BK channels and colonic K+ secretion (increases from 10% to 30-40% of daily excretion).</p>
+          <p>Hyperkalemia in CKD typically occurs when eGFR < 20 mL/min OR with superimposed factors (medications, metabolic acidosis, high K+ diet).</p>
+        </div></div>
+      </div></div>
+    </div>`;
+  },
+  pearlsCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">7</span>Clinical Pearls</h3>
+      <div class="space-y-2">${data.pearls.map(p=>`<div class="${p.icon==='!'?'alert-critical':'alert-info'} rounded-lg p-3"><div class="flex gap-3"><span class="flex-shrink-0 w-6 h-6 ${p.icon==='!'?'bg-red-600':'bg-rose-600'} text-white rounded-full flex items-center justify-center text-xs font-bold">${p.icon}</span><p class="text-sm text-slate-700">${p.text}</p></div></div>`).join('')}</div>
+    </div>`;
+  },
+  referencesCard() {
+    const refs = [
+      'Clase CM, Carrero JJ, Ellison DH, et al. Potassium homeostasis and management of dyskalemia in kidney diseases. <em>Kidney Int</em>. 2020;97(1):42-61.',
+      'Palmer BF. Managing hyperkalemia caused by inhibitors of the renin-angiotensin-aldosterone system. <em>N Engl J Med</em>. 2004;351(6):585-592.',
+      'Weisberg LS. Management of severe hyperkalemia. <em>Crit Care Med</em>. 2008;36(12):3246-3251.',
+      'Kovesdy CP. Updates in hyperkalemia: Outcomes and therapeutic strategies. <em>Rev Endocr Metab Disord</em>. 2017;18(1):41-47.',
+      'Peacock WF, Rafique Z, Clark CL, et al. Real-World Evidence for Treatment of Hyperkalemia in the Emergency Department (REVEAL-ED). <em>J Emerg Med</em>. 2018;55(6):741-750.',
+      'Sterns RH, Grieff M, Bernstein PL. Treatment of hyperkalemia: something old, something new. <em>Kidney Int</em>. 2016;89(3):546-554.',
+      'Greenbaum LA. Electrolyte and Acid-Base Disorders. In: <em>Nelson Textbook of Pediatrics</em>. 21st ed. Elsevier; 2020: Chapter 68.',
+      'AHA ACLS Guidelines for Cardiac Arrest in Hyperkalemia. <em>Circulation</em>. 2020;142(16 Suppl 2):S366-S468.'
+    ];
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-rose-100 text-rose-700 rounded-full flex items-center justify-center text-xs font-bold">8</span>References</h3>
+      <ol class="space-y-2 list-decimal list-inside">${refs.map(r=>`<li class="text-xs text-slate-600 leading-relaxed">${r}</li>`).join('')}</ol>
+    </div>`;
+  }
+};
+
+function calcHyperK() {
+  const demo = getDemo();
+  const K = parseFloat(document.getElementById('hpk-K').value);
+  const Na = parseFloat(document.getElementById('hpk-Na').value)||null;
+  const Ca = parseFloat(document.getElementById('hpk-Ca').value)||null;
+  const glucose = parseFloat(document.getElementById('hpk-glucose').value)||null;
+  const BUN = parseFloat(document.getElementById('hpk-BUN').value)||null;
+  const pH = parseFloat(document.getElementById('hpk-pH').value)||null;
+  const HCO3 = parseFloat(document.getElementById('hpk-HCO3').value)||null;
+  const pCO2 = parseFloat(document.getElementById('hpk-pCO2').value)||null;
+  const Cr = parseFloat(document.getElementById('hpk-Cr').value)||null;
+  const eGFRInput = parseFloat(document.getElementById('hpk-eGFR').value)||null;
+  const urineOutput = document.getElementById('hpk-urine-output').value||null;
+  const ecg = [...document.querySelectorAll('input[name="hpk-ecg"]:checked')].map(el=>el.value);
+  const context = [...document.querySelectorAll('input[name="hpk-ctx"]:checked')].map(el=>el.value);
+  const medications = [...document.querySelectorAll('input[name="hpk-med"]:checked')].map(el=>el.value);
+
+  const errors = [];
+  if (!K||K<0.5||K>12) errors.push('Serum K+ is required (valid range: 0.5-12.0 mEq/L)');
+  if (!demo.weight||demo.weight<0.5) errors.push('Patient weight is required');
+  if (errors.length) {
+    document.getElementById('errors-hyperK').classList.remove('hidden');
+    document.getElementById('error-list-hyperK').innerHTML = errors.map(e=>`<li>${e}</li>`).join('');
+    return;
+  }
+  document.getElementById('errors-hyperK').classList.add('hidden');
+
+  let eGFR = eGFRInput;
+  if (!eGFR&&Cr) eGFR = demo.isPed ? SHARED.eGFR_Schwartz(Cr,demo.height) : SHARED.eGFR_CKDEPI(Cr,demo.ageYears,demo.sex);
+  const acidBase = SHARED.acidBase(pH,HCO3,pCO2);
+  const severity = CALC_HYPERK.severity(K, ecg);
+  const protocolData = CLINICAL_HYPERK.emergencyProtocol({ K, weight:demo.weight, isAdult:demo.isAdult, isPed:demo.isPed, severity, ecg, context, medications, pH, HCO3, eGFR, urineOutput });
+  const dialysis = CLINICAL_HYPERK.dialysisDecision({ K, eGFR, urineOutput, context });
+  const ddx = CLINICAL_HYPERK.differentialDx({ context, medications, acidBase, eGFR, urineOutput });
+  const pearls = CLINICAL_HYPERK.clinicalPearls({ context, medications });
+
+  document.getElementById('card-hpk-severity').innerHTML = RENDER_HYPERK.severityCard({ severity, K });
+  document.getElementById('card-hpk-emergency').innerHTML = RENDER_HYPERK.emergencyCard(protocolData);
+  document.getElementById('card-hpk-dosing').innerHTML = '';
+  document.getElementById('card-hpk-dialysis').innerHTML = RENDER_HYPERK.dialysisCard(dialysis);
+  document.getElementById('card-hpk-ddx').innerHTML = RENDER_HYPERK.ddxCard({ ddx });
+  document.getElementById('card-hpk-patho').innerHTML = RENDER_HYPERK.pathoCard();
+  document.getElementById('card-hpk-pearls').innerHTML = RENDER_HYPERK.pearlsCard({ pearls });
+  document.getElementById('card-hpk-refs').innerHTML = RENDER_HYPERK.referencesCard();
+
+  document.getElementById('results-content-hyperK').classList.remove('hidden');
+  document.getElementById('placeholder-hyperK').classList.add('hidden');
+  const badge = document.getElementById('header-badge');
+  badge.className = `px-3 py-1 rounded-full text-xs font-bold border-2 ${severity.css}`;
+  badge.textContent = `K+ ${K.toFixed(1)} ↑`;
+  badge.classList.remove('hidden');
+  if (window.innerWidth<1024) document.getElementById('results-hyperK').scrollIntoView({behavior:'smooth'});
+}
+
+// ============================================================
+// HYPONATREMIA — CALC_HYPONA, CLINICAL_HYPONA, RENDER_HYPONA
+// ============================================================
+const CALC_HYPONA = {
+  severity(Na, symptoms) {
+    if (Na >= 135) return { grade:'normal', label:'Normal Na+', css:'sev-normal', urgency:'Sodium within normal range.' };
+    if (Na >= 130) return { grade:'mild', label:'Mild Hyponatremia', css:'sev-mild', urgency:'Usually asymptomatic. Address underlying cause.' };
+    if (Na >= 120) {
+      if (symptoms==='severe') return { grade:'severe', label:'Moderate Hyponatremia (Severe Symptoms)', css:'sev-severe', urgency:'URGENT: Severe symptoms require emergent 3% NaCl. ICU admission.' };
+      return { grade:'moderate', label:'Moderate Hyponatremia', css:'sev-moderate', urgency:'Symptomatic treatment warranted. Monitor correction rate closely.' };
+    }
+    return { grade:'severe', label:'Severe Hyponatremia', css:'sev-severe', urgency:'CRITICAL: High risk of cerebral edema and herniation. Emergent treatment required.' };
+  },
+  freeWaterExcess(Na, TBW) {
+    if (!Na||!TBW||Na>=140) return null;
+    const fwe = TBW * (1 - Na/140);
+    return Math.round(fwe*10)/10;
+  },
+  correctionLimits(Na, chronicity) {
+    const maxRate24 = chronicity==='acute' ? 12 : 8;
+    const maxRate48 = chronicity==='acute' ? 18 : 16;
+    const target24 = Math.min(Na + maxRate24, 135);
+    const target48 = Math.min(Na + maxRate48, 135);
+    return { maxRate24, maxRate48, target24, target48, chronicity };
+  },
+  hypertonicBolus(weight, isAdult) {
+    if (isAdult) return { dose:'100 mL 3% NaCl IV over 10 min', repeat:'May repeat up to 2 more times (total 300 mL) if symptoms persist', expected:'Expected rise: 1-2 mEq/L per 100 mL bolus' };
+    const vol = Math.round(2*weight);
+    return { dose:`${vol} mL 3% NaCl (2 mL/kg, max 100 mL) IV over 10-20 min`, repeat:'May repeat once if symptoms persist', expected:'Expected rise: ~1-2 mEq/L per bolus' };
+  }
+};
+
+const CLINICAL_HYPONA = {
+  treatmentProtocol(inp) {
+    const { Na, volume, chronicity, symptoms, history, isAdult, weight, TBW } = inp;
+    const steps = [];
+    // Severe symptoms → hypertonic saline first
+    if (symptoms==='severe'||(symptoms==='moderate'&&Na<120)) {
+      const bolus = CALC_HYPONA.hypertonicBolus(weight,isAdult);
+      steps.push({ priority:'EMERGENT', title:'3% Hypertonic Saline Bolus', items:[bolus.dose, bolus.repeat, bolus.expected, 'Goal: Raise Na+ by 4-6 mEq/L in first 6 hours, then STOP hypertonic saline.', 'Recheck Na+ after each bolus (q20-30 min during active treatment).'] });
+    }
+    // Volume-status guided
+    if (volume==='hypovolemic') {
+      steps.push({ priority:'PRIMARY', title:'Volume Repletion (Hypovolemic)', items:['Normal Saline (0.9% NaCl) IV', isAdult?'Start 250-500 mL/hr, titrate to clinical response':'Start 20 mL/kg bolus, then maintenance', 'Na+ will self-correct as volume is restored.', 'Monitor Na+ q2-4h during correction.', 'CAUTION: Once hypovolemia is corrected, ADH suppression may cause rapid aquaresis → overcorrection risk.'] });
+    } else if (volume==='euvolemic') {
+      const isSIADH = history.includes('siadh');
+      steps.push({ priority:'PRIMARY', title:'Euvolemic Hyponatremia', items:['Fluid restriction: 800-1000 mL/day (< urine output)', isSIADH?'SIADH confirmed/suspected — consider tolvaptan 15 mg PO daily (vasopressin receptor antagonist)':'Workup: TSH, cortisol, SIADH criteria', 'Salt tablets: NaCl 1-2 g PO TID with meals', 'If refractory: urea 15-30 g/day PO (osmotic diuretic)', 'Monitor Na+ q6-8h during active correction.'] });
+    } else if (volume==='hypervolemic') {
+      steps.push({ priority:'PRIMARY', title:'Hypervolemic Hyponatremia', items:['Fluid and sodium restriction (1-1.5 L/day, <2g Na/day)', 'Loop diuretics: Furosemide 20-40 mg IV (promotes free water excretion > Na excretion)', history.includes('chf')?'Optimize heart failure therapy (ACEi/ARB, beta-blocker, MRA)':'', history.includes('cirrhosis')?'Spironolactone + furosemide. Avoid tolvaptan in cirrhosis (hepatotoxicity risk).':'', 'Monitor Na+ q4-6h, I/Os, daily weight.'].filter(Boolean) });
+    }
+    return steps;
+  },
+  adrogueMadiasTable(serumNa, TBW) {
+    if (!TBW||!serumNa) return [];
+    const fluids = [
+      { name:'3% NaCl', Na:513 },
+      { name:'0.9% NaCl (NS)', Na:154 },
+      { name:'Lactated Ringer', Na:130 },
+      { name:'0.45% NaCl (½NS)', Na:77 },
+      { name:'D5W', Na:0 },
+      { name:'5% NaCl', Na:856 }
+    ];
+    return fluids.map(f => {
+      const delta = SHARED.adrogueMadias(f.Na, serumNa, TBW);
+      return { ...f, delta: delta ? Math.round(delta*100)/100 : null };
+    });
+  },
+  odsRisk(inp) {
+    const risk = [];
+    if (inp.Na < 105) risk.push('Extremely low Na+ (<105) — highest ODS risk');
+    if (inp.chronicity==='chronic') risk.push('Chronic hyponatremia (≥48h) — brain has adapted, vulnerable to rapid correction');
+    if (inp.history.includes('beer_potomania')||inp.history.includes('polydipsia')) risk.push('Low solute states (beer potomania/polydipsia) — high risk of overcorrection from aquaresis');
+    if (inp.history.includes('thiazides')) risk.push('Thiazide-induced — risk of rapid self-correction when drug is stopped');
+    const factors = ['Alcoholism','Malnutrition','Hypokalemia','Liver disease','Burns'];
+    factors.forEach(f => { if (inp.history.includes('cirrhosis')&&f==='Liver disease') risk.push('Liver disease — known ODS risk factor'); });
+    return risk;
+  },
+  differentialDx(inp) {
+    const { Na, serumOsm, volume, urineNa, urineOsm, history, glucose } = inp;
+    const ddx = { hypertonic:[], isotonic:[], hypotonic_hypo:[], hypotonic_eu:[], hypotonic_hyper:[] };
+    const corrNa = SHARED.correctedNa(Na, glucose);
+    if (glucose && glucose > 200) ddx.hypertonic.push(`Hyperglycemia: Corrected Na+ = ${corrNa?corrNa.toFixed(0):'-'} mEq/L (glucose draws water osmotically → dilutional)`);
+    if (serumOsm && serumOsm > 295) { ddx.hypertonic.push('Consider: mannitol, contrast agents, glycine (TURP syndrome)'); ddx.isotonic.push('Consider: hyperlipidemia, hyperproteinemia (pseudohyponatremia — lab artifact with indirect ISE)'); }
+    if (volume==='hypovolemic') {
+      if (urineNa!==null && urineNa < 20) { ddx.hypotonic_hypo.push('Urine Na+ < 20: Extrarenal losses (GI: vomiting, diarrhea; third-spacing; burns)'); }
+      else if (urineNa!==null && urineNa >= 20) { ddx.hypotonic_hypo.push('Urine Na+ ≥ 20: Renal salt wasting (diuretics, cerebral salt wasting, mineralocorticoid deficiency, RTA)'); }
+      if (history.includes('thiazides')) ddx.hypotonic_hypo.push('Thiazide diuretics: Block NCC → impaired dilution + volume depletion → ADH release');
+    }
+    if (volume==='euvolemic') {
+      if (history.includes('siadh')) ddx.hypotonic_eu.push('SIADH: Urine Osm > 100, Urine Na+ > 30, euvolemic, normal thyroid/adrenal function');
+      if (history.includes('hypothyroid')) ddx.hypotonic_eu.push('Hypothyroidism (severe/myxedema): ↓ cardiac output → ADH release');
+      if (history.includes('adrenal_insuff')) ddx.hypotonic_eu.push('Adrenal insufficiency: Cortisol deficiency → non-osmotic ADH release');
+      if (history.includes('ssri')) ddx.hypotonic_eu.push('SSRI-induced SIADH: Common in elderly, usually develops within 2 weeks of initiation');
+      if (history.includes('polydipsia')) ddx.hypotonic_eu.push('Psychogenic polydipsia: Intake > 15-20 L/day overwhelms renal diluting capacity. Urine Osm < 100.');
+      if (history.includes('beer_potomania')) ddx.hypotonic_eu.push('Beer potomania / tea-and-toast: Low solute intake → few osmoles for renal free water excretion (need solute to make dilute urine)');
+      if (history.includes('postop')) ddx.hypotonic_eu.push('Post-operative: Pain/stress/nausea → ADH release + hypotonic IV fluids');
+      if (history.includes('marathon')) ddx.hypotonic_eu.push('Exercise-associated hyponatremia: ADH release + excessive hypotonic fluid intake during prolonged exertion');
+    }
+    if (volume==='hypervolemic') {
+      if (history.includes('chf')) ddx.hypotonic_hyper.push('Heart failure: ↓ effective arterial blood volume → neurohormonal activation → ADH release + renal Na/water retention');
+      if (history.includes('cirrhosis')) ddx.hypotonic_hyper.push('Cirrhosis: Splanchnic vasodilation → ↓ EABV → ADH release + renal Na retention');
+      if (history.includes('nephrotic')) ddx.hypotonic_hyper.push('Nephrotic syndrome: ↓ oncotic pressure → edema + ↓ EABV → ADH release');
+    }
+    return ddx;
+  },
+  clinicalPearls(inp) {
+    const pearls = [];
+    pearls.push({icon:'1',text:'The brain adapts to chronic hyponatremia by losing organic osmolytes (taurine, myo-inositol, glutamine) over 24-48h. Rapid correction depletes these osmolytes faster than they can be restored → osmotic demyelination syndrome (ODS).'});
+    pearls.push({icon:'2',text:'Maximum correction rate for CHRONIC hyponatremia: 8 mEq/L in 24h, 16 mEq/L in 48h. For high-risk patients (liver disease, alcoholism, malnutrition, K+ < 3.0): limit to 6 mEq/L in 24h.'});
+    pearls.push({icon:'3',text:'If overcorrection occurs: Give D5W 3-6 mL/kg/hr IV to re-lower Na+. Consider desmopressin (DDAVP) 2-4 mcg IV q8h to clamp urine output and prevent further free water excretion.'});
+    pearls.push({icon:'4',text:'Urine Na+ + Urine K+ > Serum Na+ → net water retention (as if patient is "drinking" free water through the kidney). Key metric for SIADH management.'});
+    if (inp.history.includes('siadh')) pearls.push({icon:'!',text:'SIADH diagnostic criteria: Serum Osm < 275, Urine Osm > 100 (inappropriately concentrated), Urine Na+ > 30, euvolemic, normal thyroid/adrenal/renal function, no diuretics.'});
+    if (inp.history.includes('chf')) pearls.push({icon:'!',text:'In CHF, hyponatremia is a strong prognostic marker. Na+ < 135 associated with doubled mortality risk (Gheorghiade M, Am J Cardiol 2007).'});
+    pearls.push({icon:'5',text:'Adrogue-Madias formula predicts change per 1L of infusate but underestimates correction when insensible losses or urine output cause additional free water loss. Always recheck Na+ frequently.'});
+    return pearls;
+  }
+};
+
+const RENDER_HYPONA = {
+  severityCard(data) {
+    const { severity, Na } = data;
+    const pulseClass = severity.grade==='severe'?'severe-pulse':'';
+    return `<div class="card-print rounded-xl border-2 p-5 ${severity.css} ${pulseClass}">
+      <div class="flex items-center justify-between"><div><div class="text-3xl font-bold">${Na} mEq/L</div><div class="text-lg font-semibold mt-1">${severity.label}</div></div><div class="text-right"><div class="text-5xl font-black opacity-20">Na+↓</div></div></div>
+      <p class="mt-3 text-sm font-medium">${severity.urgency}</p>
+      ${data.corrNa?`<p class="mt-2 text-sm">Corrected Na+ (for glucose): <strong>${data.corrNa.toFixed(0)} mEq/L</strong></p>`:''}
+    </div>`;
+  },
+  fweCard(data) {
+    if (data.fwe===null) return '';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>Free Water Excess</h3>
+      <div class="bg-indigo-50 rounded-lg p-4 text-center"><div class="text-3xl font-bold text-indigo-700">${data.fwe.toFixed(1)} L</div><div class="text-xs text-slate-500 mt-1">TBW × (1 − Na/140) = ${data.TBW.toFixed(1)} × (1 − ${data.Na}/140)</div></div>
+      <p class="text-xs text-slate-500 mt-3">This is the estimated volume of free water that would need to be removed to normalize Na+ to 140 mEq/L. Do NOT remove all at once — respect correction rate limits.</p>
+    </div>`;
+  },
+  correctionCard(data) {
+    const c = data.limits;
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">3</span>Correction Rate Limits</h3>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-3">
+        <p class="text-sm font-bold text-red-800">Maximum correction rate (${c.chronicity}):</p>
+        <div class="grid grid-cols-2 gap-4 mt-2 text-center">
+          <div><div class="text-2xl font-bold text-red-700">${c.maxRate24} mEq/L</div><div class="text-xs text-slate-600">in 24 hours</div><div class="text-xs text-slate-500">Target: ${c.target24} mEq/L</div></div>
+          <div><div class="text-2xl font-bold text-red-700">${c.maxRate48} mEq/L</div><div class="text-xs text-slate-600">in 48 hours</div><div class="text-xs text-slate-500">Target: ${c.target48} mEq/L</div></div>
+        </div>
+      </div>
+      <div class="alert-critical rounded-lg p-3"><p class="text-xs font-medium">EXCEEDING these limits risks Osmotic Demyelination Syndrome (ODS) — irreversible pontine and extrapontine myelinolysis.</p></div>
+    </div>`;
+  },
+  protocolCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">4</span>Treatment Protocol</h3>
+      <div class="space-y-4">${data.steps.map(s=>`
+        <div class="bg-${s.priority==='EMERGENT'?'red':'indigo'}-50 border border-${s.priority==='EMERGENT'?'red':'indigo'}-200 rounded-lg p-4">
+          <div class="text-xs font-bold text-${s.priority==='EMERGENT'?'red':'indigo'}-600 uppercase mb-1">${s.priority}</div>
+          <div class="font-semibold text-sm mb-2">${s.title}</div>
+          <ul class="space-y-1">${s.items.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-${s.priority==='EMERGENT'?'red':'indigo'}-300">${i}</li>`).join('')}</ul>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  },
+  adrogueCard(data) {
+    if (!data.table||!data.table.length) return '';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">5</span>Adrogue-Madias Infusate Comparison</h3>
+      <p class="text-xs text-slate-500 mb-3">Predicted ΔNa+ per 1 liter of each infusate. Formula: (Infusate Na − Serum Na) ÷ (TBW + 1)</p>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50"><th class="text-left p-2 font-semibold">Infusate</th><th class="text-center p-2 font-semibold">Na+ (mEq/L)</th><th class="text-center p-2 font-semibold">ΔNa per 1L</th></tr></thead><tbody>
+        ${data.table.map(r=>`<tr class="border-t border-slate-100"><td class="p-2">${r.name}</td><td class="text-center p-2">${r.Na}</td><td class="text-center p-2 font-bold ${r.delta>0?'text-green-700':r.delta<0?'text-red-700':'text-slate-500'}">${r.delta!==null?(r.delta>0?'+':'')+r.delta.toFixed(2):'-'}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="alert-warning rounded-lg p-3 mt-3"><p class="text-xs">This formula estimates change per 1L infused. Actual correction depends on urine output, insensible losses, and oral intake. Recheck Na+ q2-4h.</p></div>
+    </div>`;
+  },
+  ddxCard(data) {
+    const d = data.ddx;
+    const rl = (title,items,color) => { if(!items.length) return ''; return `<div class="mb-3"><h4 class="font-semibold text-sm text-${color}-700 mb-2">${title}</h4><ul class="space-y-1.5">${items.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-${color}-300">${i}</li>`).join('')}</ul></div>`; };
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">6</span>Differential Diagnosis</h3>
+      ${rl('Hypertonic / Pseudohyponatremia',d.hypertonic.concat(d.isotonic),'amber')}
+      ${rl('Hypotonic — Hypovolemic',d.hypotonic_hypo,'red')}
+      ${rl('Hypotonic — Euvolemic',d.hypotonic_eu,'indigo')}
+      ${rl('Hypotonic — Hypervolemic',d.hypotonic_hyper,'teal')}
+    </div>`;
+  },
+  odsCard(data) {
+    if (!data.risks.length) return `<div class="card-print rounded-xl bg-emerald-50 border border-emerald-200 p-4"><p class="text-sm text-emerald-700 font-medium">ODS risk assessment: No major risk factors identified. Still adhere to correction rate limits.</p></div>`;
+    return `<div class="card-print rounded-xl bg-white border border-red-200 shadow-sm p-5 border-2">
+      <h3 class="font-bold text-red-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-red-100 text-red-700 rounded-full flex items-center justify-center text-xs font-bold">!</span>ODS Risk Factors Present</h3>
+      <ul class="space-y-2">${data.risks.map(r=>`<li class="text-sm text-red-700 pl-3 border-l-2 border-red-400 font-medium">${r}</li>`).join('')}</ul>
+      <div class="bg-red-50 rounded-lg p-3 mt-3"><p class="text-xs text-red-800 font-semibold">Consider limiting correction to ≤ 6 mEq/L in 24h. Have DDAVP and D5W ready for rescue if overcorrection occurs.</p></div>
+    </div>`;
+  },
+  pathoCard() {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+      <button onclick="toggleSection('hn-patho-body')" class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">8</span>Pathophysiology</h3>
+        <svg id="chev-hn-patho-body" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="hn-patho-body" class="collapsible-body px-5 pb-5"><div class="space-y-4">
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Why Hyponatremia Matters</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2">
+          <p>Na+ is the primary determinant of serum osmolality and therefore the main driver of water movement across cell membranes. Low Na+ → hypo-osmolality → water moves INTO cells → <strong>cerebral edema</strong>.</p>
+          <p>Acute cerebral edema → ↑ ICP → headache → seizures → transtentorial herniation → death.</p>
+          <p>Brain adapts over 24-48h by extruding organic osmolytes. This adaptation protects against edema but makes the brain vulnerable to rapid shrinkage if Na+ is corrected too quickly → <strong>osmotic demyelination syndrome (ODS)</strong>.</p>
+        </div></div>
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">ODS (Osmotic Demyelination Syndrome)</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2">
+          <p>Formerly "central pontine myelinolysis." Rapid Na+ correction → brain cells shrink → endothelial damage → blood-brain barrier breakdown → oligodendrocyte apoptosis → demyelination.</p>
+          <p>Symptoms appear 2-6 days after overcorrection: dysarthria, dysphagia, quadriparesis, "locked-in" syndrome. MRI shows pontine and/or extrapontine demyelination.</p>
+          <p>Risk factors: Chronic hyponatremia, Na+ <105, alcoholism, malnutrition, liver disease, hypokalemia, burns.</p>
+        </div></div>
+      </div></div>
+    </div>`;
+  },
+  pearlsCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">9</span>Clinical Pearls</h3>
+      <div class="space-y-2">${data.pearls.map(p=>`<div class="${p.icon==='!'?'alert-critical':'alert-info'} rounded-lg p-3"><div class="flex gap-3"><span class="flex-shrink-0 w-6 h-6 ${p.icon==='!'?'bg-red-600':'bg-indigo-600'} text-white rounded-full flex items-center justify-center text-xs font-bold">${p.icon}</span><p class="text-sm text-slate-700">${p.text}</p></div></div>`).join('')}</div>
+    </div>`;
+  },
+  referencesCard() {
+    const refs = [
+      'Verbalis JG, Goldsmith SR, Greenberg A, et al. Diagnosis, evaluation, and treatment of hyponatremia: Expert panel recommendations. <em>Am J Med</em>. 2013;126(10 Suppl 1):S1-42.',
+      'Sterns RH. Disorders of plasma sodium. <em>N Engl J Med</em>. 2015;372(1):55-65.',
+      'Spasovski G, Vanholder R, Allolio B, et al. Clinical practice guideline on diagnosis and treatment of hyponatraemia. <em>Eur J Endocrinol</em>. 2014;170(3):G1-47.',
+      'Adrogue HJ, Madias NE. Hyponatremia. <em>N Engl J Med</em>. 2000;342(21):1581-1589.',
+      'Moritz ML, Ayus JC. Prevention of hospital-acquired hyponatremia. <em>Pediatrics</em>. 2015;135(4):749-751.',
+      'Sterns RH, Nigwekar SU, Hix JK. The treatment of hyponatremia. <em>Semin Nephrol</em>. 2009;29(3):282-299.',
+      'Greenbaum LA. Electrolyte and Acid-Base Disorders. In: <em>Nelson Textbook of Pediatrics</em>. 21st ed. Elsevier; 2020: Chapter 68.'
+    ];
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold">10</span>References</h3>
+      <ol class="space-y-2 list-decimal list-inside">${refs.map(r=>`<li class="text-xs text-slate-600 leading-relaxed">${r}</li>`).join('')}</ol>
+    </div>`;
+  }
+};
+
+function calcHypoNa() {
+  const demo = getDemo();
+  const Na = parseFloat(document.getElementById('hn-Na').value);
+  const K = parseFloat(document.getElementById('hn-K').value)||null;
+  const glucose = parseFloat(document.getElementById('hn-glucose').value)||null;
+  const serumOsmInput = parseFloat(document.getElementById('hn-serum-osm').value)||null;
+  const BUN = parseFloat(document.getElementById('hn-BUN').value)||null;
+  const Cr = parseFloat(document.getElementById('hn-Cr').value)||null;
+  const urineNa = parseFloat(document.getElementById('hn-urine-Na').value)||null;
+  const urineOsm = parseFloat(document.getElementById('hn-urine-osm').value)||null;
+  const urineK = parseFloat(document.getElementById('hn-urine-K').value)||null;
+  const volume = document.getElementById('hn-volume').value||null;
+  const chronicity = document.getElementById('hn-chronicity').value||'chronic';
+  const symptoms = document.getElementById('hn-symptoms').value||'asymptomatic';
+  const history = [...document.querySelectorAll('input[name="hn-hx"]:checked')].map(el=>el.value);
+
+  const errors = [];
+  if (!Na||Na<90||Na>180) errors.push('Serum Na+ is required (valid range: 90-180 mEq/L)');
+  if (!demo.weight) errors.push('Patient weight is required');
+  if (errors.length) { document.getElementById('errors-hypoNa').classList.remove('hidden'); document.getElementById('error-list-hypoNa').innerHTML=errors.map(e=>`<li>${e}</li>`).join(''); return; }
+  document.getElementById('errors-hypoNa').classList.add('hidden');
+
+  const TBW = SHARED.TBW(demo.weight, demo.sex, demo.ageYears);
+  const serumOsm = serumOsmInput || SHARED.serumOsm(Na, glucose, BUN);
+  const corrNa = glucose ? SHARED.correctedNa(Na, glucose) : null;
+  const severity = CALC_HYPONA.severity(Na, symptoms);
+  const fwe = CALC_HYPONA.freeWaterExcess(Na, TBW);
+  const limits = CALC_HYPONA.correctionLimits(Na, chronicity);
+  const steps = CLINICAL_HYPONA.treatmentProtocol({ Na, volume, chronicity, symptoms, history, isAdult:demo.isAdult, weight:demo.weight, TBW });
+  const adrogueTable = CLINICAL_HYPONA.adrogueMadiasTable(Na, TBW);
+  const ddx = CLINICAL_HYPONA.differentialDx({ Na, serumOsm, volume, urineNa, urineOsm, history, glucose });
+  const odsRisks = CLINICAL_HYPONA.odsRisk({ Na, chronicity, history });
+  const pearls = CLINICAL_HYPONA.clinicalPearls({ history });
+
+  document.getElementById('card-hn-severity').innerHTML = RENDER_HYPONA.severityCard({ severity, Na, corrNa });
+  document.getElementById('card-hn-fwe').innerHTML = RENDER_HYPONA.fweCard({ fwe, TBW, Na });
+  document.getElementById('card-hn-correction').innerHTML = RENDER_HYPONA.correctionCard({ limits });
+  document.getElementById('card-hn-protocol').innerHTML = RENDER_HYPONA.protocolCard({ steps });
+  document.getElementById('card-hn-adrogue').innerHTML = RENDER_HYPONA.adrogueCard({ table:adrogueTable });
+  document.getElementById('card-hn-ddx').innerHTML = RENDER_HYPONA.ddxCard({ ddx });
+  document.getElementById('card-hn-ods').innerHTML = RENDER_HYPONA.odsCard({ risks:odsRisks });
+  document.getElementById('card-hn-patho').innerHTML = RENDER_HYPONA.pathoCard();
+  document.getElementById('card-hn-pearls').innerHTML = RENDER_HYPONA.pearlsCard({ pearls });
+  document.getElementById('card-hn-refs').innerHTML = RENDER_HYPONA.referencesCard();
+
+  document.getElementById('results-content-hypoNa').classList.remove('hidden');
+  document.getElementById('placeholder-hypoNa').classList.add('hidden');
+  const badge = document.getElementById('header-badge');
+  badge.className = `px-3 py-1 rounded-full text-xs font-bold border-2 ${severity.css}`;
+  badge.textContent = `Na+ ${Na}`;
+  badge.classList.remove('hidden');
+  if (window.innerWidth<1024) document.getElementById('results-hypoNa').scrollIntoView({behavior:'smooth'});
+}
+
+// ============================================================
+// HYPERNATREMIA — CALC_HYPERNA, CLINICAL_HYPERNA, RENDER_HYPERNA
+// ============================================================
+const CALC_HYPERNA = {
+  severity(Na, symptoms) {
+    if (Na <= 145) return { grade:'normal', label:'Normal Na+', css:'sev-normal', urgency:'Sodium within normal range.' };
+    if (Na <= 150) return { grade:'mild', label:'Mild Hypernatremia', css:'sev-mild', urgency:'Identify cause. Ensure access to free water.' };
+    if (Na <= 160) {
+      if (symptoms==='severe') return { grade:'severe', label:'Moderate Hypernatremia (Severe Symptoms)', css:'sev-severe', urgency:'URGENT: ICU admission. Controlled free water replacement.' };
+      return { grade:'moderate', label:'Moderate Hypernatremia', css:'sev-moderate', urgency:'Free water deficit correction required. Monitor closely.' };
+    }
+    return { grade:'severe', label:'Severe Hypernatremia', css:'sev-severe', urgency:'CRITICAL: High mortality risk. ICU admission. Careful, controlled correction.' };
+  },
+  freeWaterDeficit(Na, TBW) {
+    if (!Na||!TBW||Na<=140) return null;
+    return Math.round(TBW*(Na/140 - 1)*10)/10;
+  },
+  correctionLimits(Na, chronicity) {
+    const maxRate24 = chronicity==='acute' ? 12 : 10;
+    const target24 = Math.max(Na - maxRate24, 145);
+    return { maxRate24, target24, chronicity, note: chronicity==='chronic' ? 'Max 10 mEq/L per 24h for chronic hypernatremia to avoid cerebral edema.' : 'Acute (<48h): Can correct faster, up to 1 mEq/L per hour.' };
+  }
+};
+
+const CLINICAL_HYPERNA = {
+  treatmentProtocol(inp) {
+    const { Na, weight, isAdult, isPed, TBW, fwd, context, chronicity } = inp;
+    const steps = [];
+    // Fluid selection
+    if (Na > 170) {
+      steps.push({ priority:'EMERGENT', title:'Severe Hypernatremia (Na+ > 170)', items:['Start with 0.45% NaCl (half-normal saline) rather than D5W to avoid too-rapid correction.', 'Switch to D5W or oral free water once Na+ < 160 mEq/L.', 'ICU admission with q2h Na+ monitoring mandatory.', isAdult?'Initial rate: 250-500 mL/hr 0.45% NaCl, titrate to target correction rate.':Math.round(10*weight)+' mL/hr 0.45% NaCl (10 mL/kg/hr), titrate to target.'] });
+    } else {
+      steps.push({ priority:'PRIMARY', title:'Free Water Replacement', items:[fwd?`Calculated free water deficit: ${fwd.toFixed(1)} L`:'Free water deficit cannot be calculated (need weight).', 'Replace deficit over 48-72 hours (do NOT replace all at once).', 'Options: D5W IV, 0.45% NaCl IV, or oral/NG free water if safe to swallow.', 'Add ongoing losses (insensible ~10 mL/kg/day + urine output) to replacement volume.', 'Recheck Na+ q4-6h and adjust rate.'] });
+    }
+    // DI-specific
+    if (context.includes('central_di')) {
+      steps.push({ priority:'SPECIFIC', title:'Central Diabetes Insipidus', items:['Desmopressin (DDAVP): ' + (isAdult ? '1-2 mcg IV/SC q12h or 10-40 mcg intranasal' : '0.1-1 mcg IV/SC q12-24h (start low, titrate)'), 'Monitor urine output q1h — should decrease to < 2 mL/kg/hr.', 'Monitor for water intoxication / hyponatremia with DDAVP.'] });
+    }
+    if (context.includes('nephrogenic_di')) {
+      steps.push({ priority:'SPECIFIC', title:'Nephrogenic DI', items:['Remove offending agent if possible (lithium, demeclocycline).', 'Thiazide diuretics (paradoxically reduce urine volume by 30-50%): HCTZ 25 mg PO BID.', 'Low-sodium diet (<2g/day) + amiloride 5-10 mg/day (protects from lithium reuptake).', 'NSAIDs (indomethacin) may help by reducing PGE2-mediated ADH resistance.'] });
+    }
+    return steps;
+  },
+  infusateComparison(serumNa, TBW) {
+    if (!TBW||!serumNa) return [];
+    const fluids = [
+      { name:'D5W', Na:0 },
+      { name:'0.2% NaCl (¼NS)', Na:34 },
+      { name:'0.45% NaCl (½NS)', Na:77 },
+      { name:'0.9% NaCl (NS)', Na:154 }
+    ];
+    return fluids.map(f => ({ ...f, delta: Math.round(SHARED.adrogueMadias(f.Na,serumNa,TBW)*100)/100 }));
+  },
+  diWorkup(inp) {
+    const { urineOsm, serumOsm, urineVol, context } = inp;
+    const findings = [];
+    if (urineOsm && urineOsm < 300 && serumOsm && serumOsm > 295) {
+      findings.push({ type:'warning', text:'Dilute urine (Osm < 300) with serum hyperosmolality → Diabetes Insipidus likely.' });
+      if (urineOsm < 100) findings.push({ type:'info', text:'Urine Osm < 100: Suggests complete DI (central or nephrogenic).' });
+      findings.push({ type:'info', text:'Water deprivation test (if stable) or DDAVP trial: If urine concentrates >50% with DDAVP → Central DI. If no response → Nephrogenic DI.' });
+    } else if (urineOsm && urineOsm > 700) {
+      findings.push({ type:'info', text:'Concentrated urine (Osm > 700): Appropriate ADH response. Hypernatremia due to inadequate free water intake or extrarenal losses.' });
+    }
+    if (urineVol && urineVol > 150 && inp.isAdult) findings.push({ type:'warning', text:`Urine output ${urineVol} mL/hr (>150 mL/hr) — polyuria, consider DI.` });
+    if (urineVol && !inp.isAdult && inp.weight && urineVol/inp.weight > 4) findings.push({ type:'warning', text:`Urine output ${(urineVol/inp.weight).toFixed(1)} mL/kg/hr — pediatric polyuria (>4 mL/kg/hr), consider DI.` });
+    if (context.includes('post_neurosurg')) findings.push({ type:'critical', text:'Post-neurosurgery: High risk of central DI. Triphasic response possible (DI → SIADH → permanent DI). Monitor closely.' });
+    return findings;
+  },
+  differentialDx(inp) {
+    const { context, urineOsm } = inp;
+    const ddx = { water_loss:[], sodium_gain:[], impaired_access:[] };
+    if (context.includes('central_di')) ddx.water_loss.push('Central DI: Absent/reduced ADH secretion (post-neurosurgery, trauma, tumor, idiopathic)');
+    if (context.includes('nephrogenic_di')) ddx.water_loss.push('Nephrogenic DI: Renal resistance to ADH (lithium, hypercalcemia, hypokalemia, sickle cell, tubulointerstitial disease)');
+    if (context.includes('osmotic_diuresis')) ddx.water_loss.push('Osmotic diuresis: Hyperglycemia, mannitol, urea — solute-driven water loss');
+    if (context.includes('gi_losses')) ddx.water_loss.push('GI water losses: Osmotic diarrhea (lactulose, malabsorption), NG suction');
+    ddx.water_loss.push('Insensible losses: Fever (+10% per °C), burns, tachypnea, mechanical ventilation without humidification');
+    if (context.includes('sodium_load')) ddx.sodium_gain.push('Sodium loading: Hypertonic saline, NaHCO3, salt tablets, salt poisoning (intentional/accidental)');
+    ddx.sodium_gain.push('Primary hyperaldosteronism (rare cause of mild hypernatremia)');
+    if (context.includes('impaired_thirst')) ddx.impaired_access.push('Impaired thirst mechanism: Hypothalamic lesions, elderly, cognitive impairment');
+    if (context.includes('intubated')) ddx.impaired_access.push('ICU/intubated: Cannot access water independently. Inadequate free water in IV fluids.');
+    ddx.impaired_access.push('Infants/neonates: Depend entirely on caregivers for fluid intake');
+    return ddx;
+  },
+  clinicalPearls() {
+    return [
+      {icon:'1',text:'Hypernatremia is almost always due to inadequate free water intake (not excess sodium). The key question: "Why can\'t this patient drink water?"'},
+      {icon:'2',text:'Free water deficit formula underestimates total replacement needed — must also account for ongoing losses (insensible 10-15 mL/kg/day + urine + GI losses).'},
+      {icon:'3',text:'Correction rate for chronic hypernatremia: max 10 mEq/L per 24h. Rapid correction risks cerebral edema (brain has accumulated idiogenic osmoles for protection).'},
+      {icon:'4',text:'In neonates/infants: hypernatremic dehydration causes brain shrinkage → bridging vein tearing → intracranial hemorrhage. Correct very slowly over 48-72 hours.'},
+      {icon:'5',text:'D5W is essentially free water once dextrose is metabolized. 1L D5W = 1L free water. 1L 0.45% NaCl = ~500 mL free water.'},
+      {icon:'6',text:'Post-neurosurgical DI: Watch for triphasic response — Phase 1: DI (day 1-5) → Phase 2: SIADH (day 5-10, stored AVP release) → Phase 3: Permanent DI. Monitor Na+ closely during transitions.'}
+    ];
+  }
+};
+
+const RENDER_HYPERNA = {
+  severityCard(data) {
+    const { severity, Na } = data;
+    const pulseClass = severity.grade==='severe'?'severe-pulse':'';
+    return `<div class="card-print rounded-xl border-2 p-5 ${severity.css} ${pulseClass}">
+      <div class="flex items-center justify-between"><div><div class="text-3xl font-bold">${Na} mEq/L</div><div class="text-lg font-semibold mt-1">${severity.label}</div></div><div class="text-right"><div class="text-5xl font-black opacity-20">Na+↑</div></div></div>
+      <p class="mt-3 text-sm font-medium">${severity.urgency}</p>
+    </div>`;
+  },
+  fwdCard(data) {
+    if (data.fwd===null) return '';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>Free Water Deficit</h3>
+      <div class="bg-amber-50 rounded-lg p-4 text-center"><div class="text-3xl font-bold text-amber-700">${data.fwd.toFixed(1)} L</div><div class="text-xs text-slate-500 mt-1">TBW × (Na/140 − 1) = ${data.TBW.toFixed(1)} × (${data.Na}/140 − 1)</div></div>
+      <p class="text-xs text-slate-500 mt-3">This is the minimum volume needed. Add ongoing losses (insensible + urine). Replace over 48-72 hours for chronic hypernatremia.</p>
+    </div>`;
+  },
+  correctionCard(data) {
+    const c = data.limits;
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">3</span>Correction Rate Limits</h3>
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-3">
+        <p class="text-sm font-bold text-amber-800">${c.note}</p>
+        <div class="mt-2 text-center"><div class="text-2xl font-bold text-amber-700">Max ${c.maxRate24} mEq/L in 24h</div><div class="text-sm text-slate-600">Target: ${c.target24} mEq/L</div></div>
+      </div>
+      <div class="alert-warning rounded-lg p-3"><p class="text-xs font-medium">Too-rapid correction of chronic hypernatremia → cerebral edema (brain has accumulated idiogenic osmoles). Overcorrection more dangerous than undercorrection.</p></div>
+    </div>`;
+  },
+  infusateCard(data) {
+    if (!data.table||!data.table.length) return '';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">4</span>Infusate Comparison (Adrogue-Madias)</h3>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50"><th class="text-left p-2 font-semibold">Infusate</th><th class="text-center p-2 font-semibold">Na+ (mEq/L)</th><th class="text-center p-2 font-semibold">ΔNa per 1L</th></tr></thead><tbody>
+        ${data.table.map(r=>`<tr class="border-t border-slate-100"><td class="p-2">${r.name}</td><td class="text-center p-2">${r.Na}</td><td class="text-center p-2 font-bold ${r.delta<0?'text-green-700':'text-red-700'}">${r.delta>0?'+':''}${r.delta.toFixed(2)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="text-xs text-slate-500 mt-3">Negative ΔNa values indicate the infusate will lower Na+. Choose the infusate that provides adequate correction without overcorrection.</p>
+    </div>`;
+  },
+  protocolCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">5</span>Treatment Protocol</h3>
+      <div class="space-y-4">${data.steps.map(s=>`
+        <div class="bg-${s.priority==='EMERGENT'?'red':s.priority==='SPECIFIC'?'amber':'amber'}-50 border border-${s.priority==='EMERGENT'?'red':'amber'}-200 rounded-lg p-4">
+          <div class="text-xs font-bold text-${s.priority==='EMERGENT'?'red':'amber'}-600 uppercase mb-1">${s.priority}</div>
+          <div class="font-semibold text-sm mb-2">${s.title}</div>
+          <ul class="space-y-1">${s.items.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-amber-300">${i}</li>`).join('')}</ul>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  },
+  diCard(data) {
+    if (!data.findings.length) return '';
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">6</span>DI Workup</h3>
+      <div class="space-y-2">${data.findings.map(f=>`<div class="alert-${f.type} rounded-lg p-3"><p class="text-sm">${f.text}</p></div>`).join('')}</div>
+    </div>`;
+  },
+  ddxCard(data) {
+    const d = data.ddx;
+    const rl = (title,items,color) => { if(!items.length) return ''; return `<div class="mb-3"><h4 class="font-semibold text-sm text-${color}-700 mb-2">${title}</h4><ul class="space-y-1.5">${items.map(i=>`<li class="text-sm text-slate-700 pl-3 border-l-2 border-${color}-300">${i}</li>`).join('')}</ul></div>`; };
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">7</span>Differential Diagnosis</h3>
+      ${rl('Water Loss',d.water_loss,'amber')}
+      ${rl('Sodium Gain',d.sodium_gain,'red')}
+      ${rl('Impaired Access to Water',d.impaired_access,'slate')}
+    </div>`;
+  },
+  pathoCard() {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+      <button onclick="toggleSection('hna-patho-body')" class="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">8</span>Pathophysiology</h3>
+        <svg id="chev-hna-patho-body" class="chevron w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="hna-patho-body" class="collapsible-body px-5 pb-5"><div class="space-y-4">
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Brain Adaptation</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2">
+          <p>Hypernatremia → hyperosmolality → water moves OUT of cells → brain shrinkage.</p>
+          <p>Over 24-48h, brain cells generate <strong>idiogenic osmoles</strong> (taurine, myo-inositol, glycerophosphocholine) to draw water back in, partially restoring brain volume.</p>
+          <p>If Na+ is corrected too rapidly, these accumulated osmolytes cause excessive water entry → <strong>cerebral edema</strong>, seizures, permanent neurologic injury.</p>
+        </div></div>
+        <div><h4 class="font-semibold text-sm text-slate-700 mb-2">Diabetes Insipidus</h4><div class="bg-slate-50 rounded-lg p-3 text-sm text-slate-600 space-y-2">
+          <p><strong>Central DI:</strong> Deficient ADH secretion from posterior pituitary. Causes: surgery, trauma, tumors (craniopharyngioma), autoimmune, idiopathic.</p>
+          <p><strong>Nephrogenic DI:</strong> Kidney resistance to ADH. Causes: lithium (most common), hypercalcemia, hypokalemia, sickle cell, obstructive uropathy.</p>
+          <p>Both → dilute urine (Osm < 300) despite concentrated serum → massive free water loss → hypernatremia.</p>
+        </div></div>
+      </div></div>
+    </div>`;
+  },
+  pearlsCard(data) {
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">9</span>Clinical Pearls</h3>
+      <div class="space-y-2">${data.pearls.map(p=>`<div class="alert-info rounded-lg p-3"><div class="flex gap-3"><span class="flex-shrink-0 w-6 h-6 bg-amber-600 text-white rounded-full flex items-center justify-center text-xs font-bold">${p.icon}</span><p class="text-sm text-slate-700">${p.text}</p></div></div>`).join('')}</div>
+    </div>`;
+  },
+  referencesCard() {
+    const refs = [
+      'Adrogue HJ, Madias NE. Hypernatremia. <em>N Engl J Med</em>. 2000;342(20):1493-1499.',
+      'Sterns RH. Disorders of plasma sodium. <em>N Engl J Med</em>. 2015;372(1):55-65.',
+      'Muhsin SA, Mount DB. Diagnosis and treatment of hypernatremia. <em>Best Pract Res Clin Endocrinol Metab</em>. 2016;30(2):189-203.',
+      'Chauhan K, Pattharanitima P, Gnanasekaran I, et al. Rate of correction of hypernatremia and health outcomes. <em>Clin J Am Soc Nephrol</em>. 2019;14(5):656-663.',
+      'Moritz ML, Ayus JC. Disorders of water metabolism in children. <em>Curr Opin Pediatr</em>. 2002;14(2):167-172.',
+      'Greenbaum LA. Electrolyte and Acid-Base Disorders. In: <em>Nelson Textbook of Pediatrics</em>. 21st ed. Elsevier; 2020: Chapter 68.',
+      'Robertson GL. Diabetes insipidus: Differential diagnosis and management. <em>Best Pract Res Clin Endocrinol Metab</em>. 2016;30(2):205-218.'
+    ];
+    return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold">10</span>References</h3>
+      <ol class="space-y-2 list-decimal list-inside">${refs.map(r=>`<li class="text-xs text-slate-600 leading-relaxed">${r}</li>`).join('')}</ol>
+    </div>`;
+  }
+};
+
+function calcHyperNa() {
+  const demo = getDemo();
+  const Na = parseFloat(document.getElementById('hna-Na').value);
+  const K = parseFloat(document.getElementById('hna-K').value)||null;
+  const glucose = parseFloat(document.getElementById('hna-glucose').value)||null;
+  const BUN = parseFloat(document.getElementById('hna-BUN').value)||null;
+  const serumOsmInput = parseFloat(document.getElementById('hna-serum-osm').value)||null;
+  const urineOsm = parseFloat(document.getElementById('hna-urine-osm').value)||null;
+  const urineNa = parseFloat(document.getElementById('hna-urine-Na').value)||null;
+  const urineVol = parseFloat(document.getElementById('hna-urine-vol').value)||null;
+  const chronicity = document.getElementById('hna-chronicity').value||'chronic';
+  const symptoms = document.getElementById('hna-symptoms').value||'asymptomatic';
+  const context = [...document.querySelectorAll('input[name="hna-ctx"]:checked')].map(el=>el.value);
+
+  const errors = [];
+  if (!Na||Na<90||Na>200) errors.push('Serum Na+ is required (valid range: 90-200 mEq/L)');
+  if (!demo.weight) errors.push('Patient weight is required');
+  if (errors.length) { document.getElementById('errors-hyperNa').classList.remove('hidden'); document.getElementById('error-list-hyperNa').innerHTML=errors.map(e=>`<li>${e}</li>`).join(''); return; }
+  document.getElementById('errors-hyperNa').classList.add('hidden');
+
+  const TBW = SHARED.TBW(demo.weight, demo.sex, demo.ageYears);
+  const serumOsm = serumOsmInput || SHARED.serumOsm(Na, glucose, BUN);
+  const severity = CALC_HYPERNA.severity(Na, symptoms);
+  const fwd = CALC_HYPERNA.freeWaterDeficit(Na, TBW);
+  const limits = CALC_HYPERNA.correctionLimits(Na, chronicity);
+  const infusateTable = CLINICAL_HYPERNA.infusateComparison(Na, TBW);
+  const steps = CLINICAL_HYPERNA.treatmentProtocol({ Na, weight:demo.weight, isAdult:demo.isAdult, isPed:demo.isPed, TBW, fwd, context, chronicity });
+  const diFindings = CLINICAL_HYPERNA.diWorkup({ urineOsm, serumOsm, urineVol, context, isAdult:demo.isAdult, weight:demo.weight });
+  const ddx = CLINICAL_HYPERNA.differentialDx({ context, urineOsm });
+  const pearls = CLINICAL_HYPERNA.clinicalPearls();
+
+  document.getElementById('card-hna-severity').innerHTML = RENDER_HYPERNA.severityCard({ severity, Na });
+  document.getElementById('card-hna-fwd').innerHTML = RENDER_HYPERNA.fwdCard({ fwd, TBW, Na });
+  document.getElementById('card-hna-correction').innerHTML = RENDER_HYPERNA.correctionCard({ limits });
+  document.getElementById('card-hna-infusate').innerHTML = RENDER_HYPERNA.infusateCard({ table:infusateTable });
+  document.getElementById('card-hna-protocol').innerHTML = RENDER_HYPERNA.protocolCard({ steps });
+  document.getElementById('card-hna-di').innerHTML = RENDER_HYPERNA.diCard({ findings:diFindings });
+  document.getElementById('card-hna-ddx').innerHTML = RENDER_HYPERNA.ddxCard({ ddx });
+  document.getElementById('card-hna-patho').innerHTML = RENDER_HYPERNA.pathoCard();
+  document.getElementById('card-hna-pearls').innerHTML = RENDER_HYPERNA.pearlsCard({ pearls });
+  document.getElementById('card-hna-refs').innerHTML = RENDER_HYPERNA.referencesCard();
+
+  document.getElementById('results-content-hyperNa').classList.remove('hidden');
+  document.getElementById('placeholder-hyperNa').classList.add('hidden');
+  const badge = document.getElementById('header-badge');
+  badge.className = `px-3 py-1 rounded-full text-xs font-bold border-2 ${severity.css}`;
+  badge.textContent = `Na+ ${Na} ↑`;
+  badge.classList.remove('hidden');
+  if (window.innerWidth<1024) document.getElementById('results-hyperNa').scrollIntoView({behavior:'smooth'});
+}
+
+// ============================================================
+// IV FLUID CALCULATOR — FLUID_DB, ADDITIVE_DB, calcFluidElectrolytes
+// ============================================================
+const FLUID_DB = {
+  'NS':       { label:'0.9% NaCl (NS)',    Na:154, K:0,  Cl:154, Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:308 },
+  'halfNS':   { label:'0.45% NaCl (½NS)',  Na:77,  K:0,  Cl:77,  Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:154 },
+  'quarterNS':{ label:'0.2% NaCl (¼NS)',   Na:34,  K:0,  Cl:34,  Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:68 },
+  'D5W':      { label:'D5W',               Na:0,   K:0,  Cl:0,   Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:50, osm:252 },
+  'D10W':     { label:'D10W',              Na:0,   K:0,  Cl:0,   Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:100, osm:505 },
+  'D5NS':     { label:'D5 0.9% NaCl',      Na:154, K:0,  Cl:154, Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:50, osm:560 },
+  'D5halfNS': { label:'D5 0.45% NaCl',     Na:77,  K:0,  Cl:77,  Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:50, osm:406 },
+  'D5quarterNS':{ label:'D5 0.2% NaCl',    Na:34,  K:0,  Cl:34,  Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:50, osm:321 },
+  'LR':       { label:'Lactated Ringer',    Na:130, K:4,  Cl:109, Ca:2.7, Mg:0, lactate:28, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:273 },
+  'D5LR':     { label:'D5 Lactated Ringer', Na:130, K:4,  Cl:109, Ca:2.7, Mg:0, lactate:28, acetate:0, gluconate:0, PO4:0, dextrose:50, osm:525 },
+  'plasmalyte':{ label:'Plasma-Lyte 148',   Na:140, K:5,  Cl:98,  Ca:0, Mg:3, lactate:0, acetate:27, gluconate:23, PO4:0, dextrose:0, osm:294 },
+  'NaCl3':    { label:'3% NaCl (Hypertonic)', Na:513, K:0, Cl:513, Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:1027 },
+  'NaCl234':  { label:'23.4% NaCl',         Na:4004, K:0, Cl:4004, Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:8008 },
+  'NaHCO3':   { label:'8.4% NaHCO3',       Na:1000, K:0, Cl:0,   Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:2000 },
+  'custom':   { label:'Custom Fluid',       Na:0,  K:0,  Cl:0,   Ca:0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:0, osm:0 }
+};
+
+const ADDITIVE_DB = {
+  'KCl':      { label:'KCl (2 mEq/mL)',            mEqPerML:{ K:2, Cl:2 }, unit:'mEq', perUnit:'mL' },
+  'NaCl234':  { label:'NaCl 23.4% (4 mEq/mL)',     mEqPerML:{ Na:4, Cl:4 }, unit:'mEq', perUnit:'mL' },
+  'MgSO4':    { label:'MgSO4 50% (4 mEq/mL)',      mEqPerML:{ Mg:4 }, unit:'mEq', perUnit:'mL' },
+  'CaGluc':   { label:'CaGluconate 10% (0.465 mEq/mL)', mEqPerML:{ Ca:0.465 }, unit:'mEq', perUnit:'mL' },
+  'KPhos':    { label:'KPhos (4.4 mEq K + 3 mmol PO4/mL)', mEqPerML:{ K:4.4, PO4:3 }, unit:'mL', perUnit:'mL' },
+  'NaPhos':   { label:'NaPhos (4 mEq Na + 3 mmol PO4/mL)', mEqPerML:{ Na:4, PO4:3 }, unit:'mL', perUnit:'mL' },
+  'NaHCO3':   { label:'NaHCO3 8.4% (1 mEq/mL)',    mEqPerML:{ Na:1 }, unit:'mEq', perUnit:'mL' }
+};
+
+let fluidLineCount = 0;
+function addFluidLine() {
+  fluidLineCount++;
+  const id = fluidLineCount;
+  const fluidOpts = Object.entries(FLUID_DB).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  const addOpts = '<option value="">None</option>' + Object.entries(ADDITIVE_DB).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  const html = `<div id="iv-line-${id}" class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-semibold text-slate-600">Line ${id}</span>
+      <button onclick="removeFluidLine(${id})" class="text-xs text-red-500 hover:text-red-700">Remove</button>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Base Fluid</label><select id="iv-fluid-${id}" onchange="onFluidChange(${id})" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${fluidOpts}</select></div>
+      <div><label class="block text-xs text-slate-500 mb-1">Volume (mL)</label><input type="number" id="iv-vol-${id}" min="1" max="10000" step="1" placeholder="1000" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+      <div><label class="block text-xs text-slate-500 mb-1">Rate (mL/hr)</label><input type="number" id="iv-rate-${id}" min="1" max="2000" step="1" placeholder="100" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+    </div>
+    <div id="iv-custom-${id}" class="hidden mt-2 grid grid-cols-3 sm:grid-cols-5 gap-2">
+      <div><label class="block text-xs text-slate-500 mb-1">Na+</label><input type="number" id="iv-cNa-${id}" min="0" step="1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+      <div><label class="block text-xs text-slate-500 mb-1">K+</label><input type="number" id="iv-cK-${id}" min="0" step="1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+      <div><label class="block text-xs text-slate-500 mb-1">Cl-</label><input type="number" id="iv-cCl-${id}" min="0" step="1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+      <div><label class="block text-xs text-slate-500 mb-1">Ca2+</label><input type="number" id="iv-cCa-${id}" min="0" step="0.1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+      <div><label class="block text-xs text-slate-500 mb-1">Dex(g/L)</label><input type="number" id="iv-cDex-${id}" min="0" step="1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
+    </div>
+    <div class="mt-2"><label class="block text-xs text-slate-500 mb-1">Additive 1</label><div class="grid grid-cols-3 gap-2"><select id="iv-add1-${id}" class="col-span-2 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add1-amt-${id}" min="0" step="1" placeholder="mEq or mL" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div></div>
+    <div class="mt-1"><label class="block text-xs text-slate-500 mb-1">Additive 2</label><div class="grid grid-cols-3 gap-2"><select id="iv-add2-${id}" class="col-span-2 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add2-amt-${id}" min="0" step="1" placeholder="mEq or mL" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div></div>
+  </div>`;
+  document.getElementById('iv-fluid-lines').insertAdjacentHTML('beforeend', html);
+}
+function removeFluidLine(id) { document.getElementById('iv-line-'+id)?.remove(); }
+function onFluidChange(id) {
+  const sel = document.getElementById('iv-fluid-'+id).value;
+  document.getElementById('iv-custom-'+id).classList.toggle('hidden', sel!=='custom');
+}
+
+function calcFluidElectrolytes() {
+  const demo = getDemo();
+  const duration = parseFloat(document.getElementById('iv-duration').value)||24;
+  const lineEls = document.getElementById('iv-fluid-lines').children;
+  if (!lineEls.length) { document.getElementById('errors-ivCalc').classList.remove('hidden'); document.getElementById('error-list-ivCalc').innerHTML='<li>Add at least one fluid line.</li>'; return; }
+  document.getElementById('errors-ivCalc').classList.add('hidden');
+
+  const ELYTES = ['Na','K','Cl','Ca','Mg','lactate','acetate','gluconate','PO4'];
+  const totals = {}; ELYTES.forEach(e=>totals[e]=0); totals.dextrose=0; totals.volume=0; totals.freeWater=0;
+  const lineResults = [];
+
+  for (const el of lineEls) {
+    const id = el.id.split('-')[2];
+    const fluidKey = document.getElementById('iv-fluid-'+id)?.value;
+    if (!fluidKey) continue;
+    const rate = parseFloat(document.getElementById('iv-rate-'+id)?.value)||0;
+    const vol = parseFloat(document.getElementById('iv-vol-'+id)?.value)||0;
+    const effectiveVol = rate ? rate*duration : vol;
+    if (!effectiveVol) continue;
+
+    let fluid;
+    if (fluidKey==='custom') {
+      fluid = { Na:parseFloat(document.getElementById('iv-cNa-'+id)?.value)||0, K:parseFloat(document.getElementById('iv-cK-'+id)?.value)||0, Cl:parseFloat(document.getElementById('iv-cCl-'+id)?.value)||0, Ca:parseFloat(document.getElementById('iv-cCa-'+id)?.value)||0, Mg:0, lactate:0, acetate:0, gluconate:0, PO4:0, dextrose:parseFloat(document.getElementById('iv-cDex-'+id)?.value)||0, label:'Custom' };
+    } else {
+      fluid = FLUID_DB[fluidKey];
+    }
+
+    const lineData = { label: fluid.label || fluidKey, rate, volume: effectiveVol, electrolytes:{} };
+    ELYTES.forEach(e => { const mEq = (fluid[e]||0) * effectiveVol / 1000; lineData.electrolytes[e] = Math.round(mEq*10)/10; totals[e] += mEq; });
+    const dexG = (fluid.dextrose||0) * effectiveVol / 1000;
+    lineData.electrolytes.dextrose = Math.round(dexG*10)/10;
+    totals.dextrose += dexG;
+    totals.volume += effectiveVol;
+
+    // Free water content
+    const toneNa = (fluid.Na||0) + (fluid.K||0); // effective osmoles
+    const fwFraction = toneNa >= 154 ? 0 : toneNa === 0 ? 1 : 1 - toneNa/154;
+    lineData.freeWater = Math.round(effectiveVol * fwFraction);
+    totals.freeWater += effectiveVol * fwFraction;
+
+    // Additives
+    for (let a = 1; a <= 2; a++) {
+      const addKey = document.getElementById(`iv-add${a}-${id}`)?.value;
+      const addAmt = parseFloat(document.getElementById(`iv-add${a}-amt-${id}`)?.value)||0;
+      if (addKey && addAmt && ADDITIVE_DB[addKey]) {
+        const add = ADDITIVE_DB[addKey];
+        // addAmt is in mEq or mL — for simplicity, treat as the total amount to add to this bag
+        // mEqPerML tells us mEq per mL of additive concentrate
+        // If unit is mEq, convert: mL = mEq / (mEqPerML of primary ion)
+        // But for per-bag calculation, addAmt = total units added per bag
+        const perBagML = addAmt; // treat input as total mL of additive added to the bag
+        Object.entries(add.mEqPerML).forEach(([ion, perML]) => {
+          const addedMEq = perML * perBagML * (effectiveVol / (vol||effectiveVol)); // proportional to how much of bag is used
+          // Simpler: if we add X mL of additive to a 1000mL bag running at Y mL/hr, the additive distributes throughout
+          // Total mEq delivered = perML * perBagML (total additive) × (effectiveVol / bagVolume)
+          const bagVol = vol || 1000; // assume 1L bag if not specified
+          const totalMEqDelivered = perML * perBagML * (effectiveVol / bagVol);
+          if (ELYTES.includes(ion)) {
+            lineData.electrolytes[ion] = (lineData.electrolytes[ion]||0) + Math.round(totalMEqDelivered*10)/10;
+            totals[ion] += totalMEqDelivered;
+          }
+        });
+        lineData.label += ` + ${add.label} ${addAmt}mL`;
+      }
+    }
+
+    lineResults.push(lineData);
+  }
+
+  // Round totals
+  ELYTES.forEach(e => totals[e] = Math.round(totals[e]*10)/10);
+  totals.dextrose = Math.round(totals.dextrose*10)/10;
+  totals.volume = Math.round(totals.volume);
+  totals.freeWater = Math.round(totals.freeWater);
+
+  // GIR (Glucose Infusion Rate) for pediatrics
+  let gir = null;
+  if (demo.weight && totals.dextrose > 0) {
+    gir = Math.round((totals.dextrose * 1000 / duration) / (demo.weight * 60) * 100) / 100; // mg/kg/min
+  }
+
+  // Safety alerts
+  const alerts = [];
+  if (totals.K > 80 && demo.isAdult) alerts.push({type:'warning',text:`Total K+ delivery: ${totals.K} mEq/${duration}h. Consider monitoring for hyperkalemia.`});
+  if (totals.K > 3*demo.weight && demo.isPed) alerts.push({type:'critical',text:`Total K+ delivery: ${totals.K} mEq/${duration}h (${(totals.K/demo.weight).toFixed(1)} mEq/kg/day). Exceeds typical pediatric limit of 3 mEq/kg/day.`});
+  if (gir !== null && gir > 12) alerts.push({type:'warning',text:`GIR: ${gir} mg/kg/min. Exceeds typical maximum of 12 mg/kg/min. Risk of hyperglycemia.`});
+  if (totals.Na > 200 && demo.isAdult) alerts.push({type:'info',text:`Total Na+ delivery: ${totals.Na} mEq/${duration}h.`});
+
+  // Render
+  document.getElementById('card-iv-summary').innerHTML = renderIVSummary(totals, duration);
+  document.getElementById('card-iv-breakdown').innerHTML = renderIVBreakdown(lineResults, duration);
+  document.getElementById('card-iv-gir').innerHTML = gir !== null ? renderGIR(gir, totals.dextrose, duration, demo.weight) : '';
+  document.getElementById('card-iv-alerts').innerHTML = alerts.length ? renderIVAlerts(alerts) : '';
+
+  document.getElementById('results-content-ivCalc').classList.remove('hidden');
+  document.getElementById('placeholder-ivCalc').classList.add('hidden');
+  document.getElementById('header-badge').classList.add('hidden');
+}
+
+function renderIVSummary(totals, duration) {
+  const items = [
+    { label:'Na+', val:totals.Na, unit:'mEq', color:'blue' },
+    { label:'K+', val:totals.K, unit:'mEq', color:'purple' },
+    { label:'Cl-', val:totals.Cl, unit:'mEq', color:'slate' },
+    { label:'Ca2+', val:totals.Ca, unit:'mEq', color:'amber' },
+    { label:'Mg2+', val:totals.Mg, unit:'mEq', color:'green' },
+    { label:'PO4', val:totals.PO4, unit:'mmol', color:'pink' },
+    { label:'Dextrose', val:totals.dextrose, unit:'g', color:'orange' },
+    { label:'Total Volume', val:totals.volume, unit:'mL', color:'teal' },
+    { label:'Free Water', val:totals.freeWater, unit:'mL', color:'cyan' }
+  ];
+  return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">Σ</span>Electrolyte Delivery Summary (${duration}h)</h3>
+    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">${items.filter(i=>i.val>0).map(i=>`
+      <div class="bg-${i.color}-50 rounded-lg p-3 text-center"><div class="text-xs text-slate-500">${i.label}</div><div class="text-lg font-bold text-${i.color}-700">${i.val}</div><div class="text-xs text-slate-400">${i.unit}</div></div>`).join('')}
+    </div>
+    ${totals.lactate>0||totals.acetate>0||totals.gluconate>0?`<div class="mt-2 text-xs text-slate-500">Lactate: ${totals.lactate} mEq | Acetate: ${totals.acetate} mEq | Gluconate: ${totals.gluconate} mEq</div>`:''}
+  </div>`;
+}
+
+function renderIVBreakdown(lines, duration) {
+  const ELYTES = ['Na','K','Cl','Ca','Mg','PO4','dextrose'];
+  return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+    <h3 class="font-bold text-slate-800 mb-3">Per-Line Breakdown</h3>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="bg-slate-50">
+      <th class="text-left p-2 font-semibold">Fluid</th><th class="p-2">Vol(mL)</th><th class="p-2">Rate</th>
+      ${ELYTES.map(e=>`<th class="p-2">${e==='dextrose'?'Dex(g)':e}</th>`).join('')}
+      <th class="p-2">FW(mL)</th>
+    </tr></thead><tbody>
+      ${lines.map(l=>`<tr class="border-t border-slate-100">
+        <td class="p-2 font-medium max-w-[150px] truncate">${l.label}</td>
+        <td class="p-2 text-center">${l.volume}</td>
+        <td class="p-2 text-center">${l.rate||'-'}</td>
+        ${ELYTES.map(e=>`<td class="p-2 text-center">${l.electrolytes[e]||0}</td>`).join('')}
+        <td class="p-2 text-center">${l.freeWater||0}</td>
+      </tr>`).join('')}
+    </tbody></table></div>
+  </div>`;
+}
+
+function renderGIR(gir, dextrose, duration, weight) {
+  const girClass = gir > 12 ? 'text-red-700' : gir > 8 ? 'text-amber-700' : 'text-green-700';
+  return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">G</span>Glucose Infusion Rate (GIR)</h3>
+    <div class="bg-slate-50 rounded-lg p-4 text-center">
+      <div class="text-3xl font-bold ${girClass}">${gir} mg/kg/min</div>
+      <div class="text-xs text-slate-500 mt-1">(${dextrose}g dextrose ÷ ${duration}h ÷ ${weight}kg × 1000 ÷ 60)</div>
+    </div>
+    <div class="mt-3 text-xs text-slate-500 space-y-1">
+      <p>Neonates: Target GIR 4-6 mg/kg/min. Preterm: up to 8-12 mg/kg/min.</p>
+      <p>Peripheral IV max: ~12.5% dextrose. Central line required for >12.5%.</p>
+    </div>
+  </div>`;
+}
+
+function renderIVAlerts(alerts) {
+  return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
+    <h3 class="font-bold text-slate-800 mb-3">Safety Alerts</h3>
+    <div class="space-y-2">${alerts.map(a=>`<div class="alert-${a.type} rounded-lg p-3"><p class="text-sm">${a.text}</p></div>`).join('')}</div>
+  </div>`;
+}
+
+// Initialize with one fluid line
+document.addEventListener('DOMContentLoaded', () => addFluidLine());
+
+</script>
+</body>
+</html>
