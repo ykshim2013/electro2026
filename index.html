@@ -246,21 +246,38 @@
 </div>
 <div id="tab-content-ivCalc" class="tab-panel hidden">
   <main class="max-w-7xl mx-auto px-4 py-4">
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4 no-print">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-sm text-slate-700">IV Fluid Lines</h3>
-        <button onclick="addFluidLine()" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg">+ Add Fluid Line</button>
-      </div>
-      <div id="iv-fluid-lines" class="space-y-3"></div>
-      <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+    <!-- Duration shared across sets -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4 no-print">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
         <div><label class="block text-xs font-medium text-slate-500 mb-1">Duration (hours)</label><input type="number" id="iv-duration" min="1" max="72" step="1" value="24" placeholder="24" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
+        <div class="col-span-1 sm:col-span-3 flex justify-end">
+          <button onclick="onCalculate()" class="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-md text-sm no-print">Compare Regimens</button>
+        </div>
       </div>
-      <button onclick="onCalculate()" class="mt-3 w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-md text-sm no-print">Calculate Electrolyte Delivery</button>
+    </div>
+    <!-- Two-set grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 no-print">
+      <!-- Set A -->
+      <div class="bg-white rounded-xl shadow-sm border-2 border-teal-300 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-sm text-teal-700 flex items-center gap-2"><span class="w-6 h-6 bg-teal-600 text-white rounded-full flex items-center justify-center text-xs font-bold">A</span>Regimen A</h3>
+          <button onclick="addFluidLine('A')" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg">+ Add Line</button>
+        </div>
+        <div id="iv-fluid-lines-A" class="space-y-3"></div>
+      </div>
+      <!-- Set B -->
+      <div class="bg-white rounded-xl shadow-sm border-2 border-violet-300 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-sm text-violet-700 flex items-center gap-2"><span class="w-6 h-6 bg-violet-600 text-white rounded-full flex items-center justify-center text-xs font-bold">B</span>Regimen B</h3>
+          <button onclick="addFluidLine('B')" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg">+ Add Line</button>
+        </div>
+        <div id="iv-fluid-lines-B" class="space-y-3"></div>
+      </div>
     </div>
     <section id="results-ivCalc">
-      <div id="placeholder-ivCalc" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Add fluid lines above, then Calculate</p></div>
+      <div id="placeholder-ivCalc" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Add fluid lines to each regimen, then Compare</p></div>
       <div id="errors-ivCalc" class="hidden mb-4 alert-critical rounded-lg p-4"><p class="font-semibold text-red-700 text-sm mb-1">Errors</p><ul id="error-list-ivCalc" class="text-sm text-red-600 list-disc list-inside"></ul></div>
-      <div id="results-content-ivCalc" class="hidden space-y-4"><div id="card-iv-summary"></div><div id="card-iv-breakdown"></div><div id="card-iv-gir"></div><div id="card-iv-alerts"></div></div>
+      <div id="results-content-ivCalc" class="hidden space-y-4"><div id="card-iv-comparison"></div><div id="card-iv-breakdown-A"></div><div id="card-iv-breakdown-B"></div><div id="card-iv-gir"></div><div id="card-iv-alerts"></div></div>
     </section>
   </main>
 </div>
@@ -399,7 +416,7 @@ const SHARED = {
 function calcHyperK() { alert('Hyperkalemia tab coming next...'); }
 function calcHypoNa() { alert('Hyponatremia tab coming next...'); }
 function calcHyperNa() { alert('Hypernatremia tab coming next...'); }
-function calcFluidElectrolytes() { alert('IV Fluid Calculator coming next...'); }
+// calcFluidElectrolytes defined below with FLUID_DB
 
 // ============================================================
 // HYPOKALEMIA — CALC_HYPOK
@@ -1569,19 +1586,20 @@ const ADDITIVE_DB = {
   'NaHCO3':   { label:'NaHCO3 8.4% (1 mEq/mL)',    mEqPerML:{ Na:1 }, unit:'mEq', perUnit:'mL' }
 };
 
-let fluidLineCount = 0;
-function addFluidLine() {
-  fluidLineCount++;
-  const id = fluidLineCount;
+let fluidLineCounts = { A:0, B:0 };
+function addFluidLine(set) {
+  fluidLineCounts[set]++;
+  const id = set + fluidLineCounts[set];
   const fluidOpts = Object.entries(FLUID_DB).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
   const addOpts = '<option value="">None</option>' + Object.entries(ADDITIVE_DB).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
-  const html = `<div id="iv-line-${id}" class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+  const borderColor = set==='A' ? 'border-teal-200' : 'border-violet-200';
+  const html = `<div id="iv-line-${id}" class="bg-slate-50 rounded-lg p-3 border ${borderColor}">
     <div class="flex items-center justify-between mb-2">
-      <span class="text-xs font-semibold text-slate-600">Line ${id}</span>
-      <button onclick="removeFluidLine(${id})" class="text-xs text-red-500 hover:text-red-700">Remove</button>
+      <span class="text-xs font-semibold text-slate-600">Line ${fluidLineCounts[set]}</span>
+      <button onclick="removeFluidLine('${id}')" class="text-xs text-red-500 hover:text-red-700">Remove</button>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Base Fluid</label><select id="iv-fluid-${id}" onchange="onFluidChange(${id})" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${fluidOpts}</select></div>
+      <div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Base Fluid</label><select id="iv-fluid-${id}" onchange="onFluidChange('${id}')" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${fluidOpts}</select></div>
       <div><label class="block text-xs text-slate-500 mb-1">Volume (mL)</label><input type="number" id="iv-vol-${id}" min="1" max="10000" step="1" placeholder="1000" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
       <div><label class="block text-xs text-slate-500 mb-1">Rate (mL/hr)</label><input type="number" id="iv-rate-${id}" min="1" max="2000" step="1" placeholder="100" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
     </div>
@@ -1595,7 +1613,7 @@ function addFluidLine() {
     <div class="mt-2"><label class="block text-xs text-slate-500 mb-1">Additive 1</label><div class="grid grid-cols-3 gap-2"><select id="iv-add1-${id}" class="col-span-2 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add1-amt-${id}" min="0" step="1" placeholder="mEq or mL" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div></div>
     <div class="mt-1"><label class="block text-xs text-slate-500 mb-1">Additive 2</label><div class="grid grid-cols-3 gap-2"><select id="iv-add2-${id}" class="col-span-2 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add2-amt-${id}" min="0" step="1" placeholder="mEq or mL" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div></div>
   </div>`;
-  document.getElementById('iv-fluid-lines').insertAdjacentHTML('beforeend', html);
+  document.getElementById('iv-fluid-lines-'+set).insertAdjacentHTML('beforeend', html);
 }
 function removeFluidLine(id) { document.getElementById('iv-line-'+id)?.remove(); }
 function onFluidChange(id) {
@@ -1603,19 +1621,15 @@ function onFluidChange(id) {
   document.getElementById('iv-custom-'+id).classList.toggle('hidden', sel!=='custom');
 }
 
-function calcFluidElectrolytes() {
-  const demo = getDemo();
-  const duration = parseFloat(document.getElementById('iv-duration').value)||24;
-  const lineEls = document.getElementById('iv-fluid-lines').children;
-  if (!lineEls.length) { document.getElementById('errors-ivCalc').classList.remove('hidden'); document.getElementById('error-list-ivCalc').innerHTML='<li>Add at least one fluid line.</li>'; return; }
-  document.getElementById('errors-ivCalc').classList.add('hidden');
-
+function calcSetTotals(set, duration) {
   const ELYTES = ['Na','K','Cl','Ca','Mg','lactate','acetate','gluconate','PO4'];
   const totals = {}; ELYTES.forEach(e=>totals[e]=0); totals.dextrose=0; totals.volume=0; totals.freeWater=0;
   const lineResults = [];
+  const container = document.getElementById('iv-fluid-lines-'+set);
+  if (!container) return { totals, lineResults };
 
-  for (const el of lineEls) {
-    const id = el.id.split('-')[2];
+  for (const el of container.children) {
+    const id = el.id.replace('iv-line-','');
     const fluidKey = document.getElementById('iv-fluid-'+id)?.value;
     if (!fluidKey) continue;
     const rate = parseFloat(document.getElementById('iv-rate-'+id)?.value)||0;
@@ -1637,28 +1651,19 @@ function calcFluidElectrolytes() {
     totals.dextrose += dexG;
     totals.volume += effectiveVol;
 
-    // Free water content
-    const toneNa = (fluid.Na||0) + (fluid.K||0); // effective osmoles
+    const toneNa = (fluid.Na||0) + (fluid.K||0);
     const fwFraction = toneNa >= 154 ? 0 : toneNa === 0 ? 1 : 1 - toneNa/154;
     lineData.freeWater = Math.round(effectiveVol * fwFraction);
     totals.freeWater += effectiveVol * fwFraction;
 
-    // Additives
     for (let a = 1; a <= 2; a++) {
       const addKey = document.getElementById(`iv-add${a}-${id}`)?.value;
       const addAmt = parseFloat(document.getElementById(`iv-add${a}-amt-${id}`)?.value)||0;
       if (addKey && addAmt && ADDITIVE_DB[addKey]) {
         const add = ADDITIVE_DB[addKey];
-        // addAmt is in mEq or mL — for simplicity, treat as the total amount to add to this bag
-        // mEqPerML tells us mEq per mL of additive concentrate
-        // If unit is mEq, convert: mL = mEq / (mEqPerML of primary ion)
-        // But for per-bag calculation, addAmt = total units added per bag
-        const perBagML = addAmt; // treat input as total mL of additive added to the bag
+        const perBagML = addAmt;
         Object.entries(add.mEqPerML).forEach(([ion, perML]) => {
-          const addedMEq = perML * perBagML * (effectiveVol / (vol||effectiveVol)); // proportional to how much of bag is used
-          // Simpler: if we add X mL of additive to a 1000mL bag running at Y mL/hr, the additive distributes throughout
-          // Total mEq delivered = perML * perBagML (total additive) × (effectiveVol / bagVolume)
-          const bagVol = vol || 1000; // assume 1L bag if not specified
+          const bagVol = vol || 1000;
           const totalMEqDelivered = perML * perBagML * (effectiveVol / bagVol);
           if (ELYTES.includes(ion)) {
             lineData.electrolytes[ion] = (lineData.electrolytes[ion]||0) + Math.round(totalMEqDelivered*10)/10;
@@ -1668,33 +1673,50 @@ function calcFluidElectrolytes() {
         lineData.label += ` + ${add.label} ${addAmt}mL`;
       }
     }
-
     lineResults.push(lineData);
   }
 
-  // Round totals
   ELYTES.forEach(e => totals[e] = Math.round(totals[e]*10)/10);
   totals.dextrose = Math.round(totals.dextrose*10)/10;
   totals.volume = Math.round(totals.volume);
   totals.freeWater = Math.round(totals.freeWater);
+  return { totals, lineResults };
+}
 
-  // GIR (Glucose Infusion Rate) for pediatrics
-  let gir = null;
-  if (demo.weight && totals.dextrose > 0) {
-    gir = Math.round((totals.dextrose * 1000 / duration) / (demo.weight * 60) * 100) / 100; // mg/kg/min
-  }
+function calcFluidElectrolytes() {
+  const demo = getDemo();
+  const duration = parseFloat(document.getElementById('iv-duration').value)||24;
+  const hasA = document.getElementById('iv-fluid-lines-A').children.length > 0;
+  const hasB = document.getElementById('iv-fluid-lines-B').children.length > 0;
+  if (!hasA && !hasB) { document.getElementById('errors-ivCalc').classList.remove('hidden'); document.getElementById('error-list-ivCalc').innerHTML='<li>Add at least one fluid line to either regimen.</li>'; return; }
+  document.getElementById('errors-ivCalc').classList.add('hidden');
+
+  const setA = calcSetTotals('A', duration);
+  const setB = calcSetTotals('B', duration);
+
+  // GIR
+  let girA = null, girB = null;
+  if (demo.weight && setA.totals.dextrose > 0) girA = Math.round((setA.totals.dextrose * 1000 / duration) / (demo.weight * 60) * 100) / 100;
+  if (demo.weight && setB.totals.dextrose > 0) girB = Math.round((setB.totals.dextrose * 1000 / duration) / (demo.weight * 60) * 100) / 100;
 
   // Safety alerts
   const alerts = [];
-  if (totals.K > 80 && demo.isAdult) alerts.push({type:'warning',text:`Total K+ delivery: ${totals.K} mEq/${duration}h. Consider monitoring for hyperkalemia.`});
-  if (totals.K > 3*demo.weight && demo.isPed) alerts.push({type:'critical',text:`Total K+ delivery: ${totals.K} mEq/${duration}h (${(totals.K/demo.weight).toFixed(1)} mEq/kg/day). Exceeds typical pediatric limit of 3 mEq/kg/day.`});
-  if (gir !== null && gir > 12) alerts.push({type:'warning',text:`GIR: ${gir} mg/kg/min. Exceeds typical maximum of 12 mg/kg/min. Risk of hyperglycemia.`});
-  if (totals.Na > 200 && demo.isAdult) alerts.push({type:'info',text:`Total Na+ delivery: ${totals.Na} mEq/${duration}h.`});
+  ['A','B'].forEach(s => {
+    const t = s==='A' ? setA.totals : setB.totals;
+    const g = s==='A' ? girA : girB;
+    const label = `Regimen ${s}`;
+    if (t.volume === 0) return;
+    if (t.K > 80 && demo.isAdult) alerts.push({type:'warning',text:`${label}: Total K+ ${t.K} mEq/${duration}h. Monitor for hyperkalemia.`});
+    if (t.K > 3*demo.weight && demo.isPed) alerts.push({type:'critical',text:`${label}: K+ ${t.K} mEq/${duration}h (${(t.K/demo.weight).toFixed(1)} mEq/kg/day). Exceeds pediatric limit 3 mEq/kg/day.`});
+    if (g !== null && g > 12) alerts.push({type:'warning',text:`${label}: GIR ${g} mg/kg/min exceeds 12 mg/kg/min.`});
+    if (t.Na > 200 && demo.isAdult) alerts.push({type:'info',text:`${label}: Na+ ${t.Na} mEq/${duration}h.`});
+  });
 
   // Render
-  document.getElementById('card-iv-summary').innerHTML = renderIVSummary(totals, duration);
-  document.getElementById('card-iv-breakdown').innerHTML = renderIVBreakdown(lineResults, duration);
-  document.getElementById('card-iv-gir').innerHTML = gir !== null ? renderGIR(gir, totals.dextrose, duration, demo.weight) : '';
+  document.getElementById('card-iv-comparison').innerHTML = renderIVComparison(setA.totals, setB.totals, duration, girA, girB);
+  document.getElementById('card-iv-breakdown-A').innerHTML = setA.lineResults.length ? renderIVBreakdown(setA.lineResults, duration, 'A') : '';
+  document.getElementById('card-iv-breakdown-B').innerHTML = setB.lineResults.length ? renderIVBreakdown(setB.lineResults, duration, 'B') : '';
+  document.getElementById('card-iv-gir').innerHTML = (girA !== null || girB !== null) ? renderGIRCompare(girA, girB, setA.totals.dextrose, setB.totals.dextrose, duration, demo.weight) : '';
   document.getElementById('card-iv-alerts').innerHTML = alerts.length ? renderIVAlerts(alerts) : '';
 
   document.getElementById('results-content-ivCalc').classList.remove('hidden');
@@ -1702,31 +1724,75 @@ function calcFluidElectrolytes() {
   document.getElementById('header-badge').classList.add('hidden');
 }
 
-function renderIVSummary(totals, duration) {
-  const items = [
-    { label:'Na+', val:totals.Na, unit:'mEq', color:'blue' },
-    { label:'K+', val:totals.K, unit:'mEq', color:'purple' },
-    { label:'Cl-', val:totals.Cl, unit:'mEq', color:'slate' },
-    { label:'Ca2+', val:totals.Ca, unit:'mEq', color:'amber' },
-    { label:'Mg2+', val:totals.Mg, unit:'mEq', color:'green' },
-    { label:'PO4', val:totals.PO4, unit:'mmol', color:'pink' },
-    { label:'Dextrose', val:totals.dextrose, unit:'g', color:'orange' },
-    { label:'Total Volume', val:totals.volume, unit:'mL', color:'teal' },
-    { label:'Free Water', val:totals.freeWater, unit:'mL', color:'cyan' }
+function renderIVComparison(tA, tB, duration, girA, girB) {
+  const ELYTES = [
+    { key:'Na', label:'Na+', unit:'mEq' },
+    { key:'K', label:'K+', unit:'mEq' },
+    { key:'Cl', label:'Cl-', unit:'mEq' },
+    { key:'Ca', label:'Ca2+', unit:'mEq' },
+    { key:'Mg', label:'Mg2+', unit:'mEq' },
+    { key:'PO4', label:'PO4', unit:'mmol' },
+    { key:'dextrose', label:'Dextrose', unit:'g' },
+    { key:'volume', label:'Total Vol', unit:'mL' },
+    { key:'freeWater', label:'Free Water', unit:'mL' }
   ];
+  const rows = ELYTES.filter(e => (tA[e.key]||0) > 0 || (tB[e.key]||0) > 0).map(e => {
+    const a = tA[e.key]||0, b = tB[e.key]||0;
+    const diff = b - a;
+    const diffStr = diff === 0 ? '—' : (diff > 0 ? `<span class="text-red-600">+${Math.round(diff*10)/10}</span>` : `<span class="text-blue-600">${Math.round(diff*10)/10}</span>`);
+    const highlightA = a < b ? 'bg-teal-50' : a > b ? '' : '';
+    const highlightB = b < a ? 'bg-violet-50' : b > a ? '' : '';
+    return `<tr class="border-t border-slate-100">
+      <td class="p-2 font-medium text-slate-700">${e.label} <span class="text-slate-400 text-[10px]">${e.unit}</span></td>
+      <td class="p-2 text-center font-semibold ${highlightA}">${a}</td>
+      <td class="p-2 text-center font-semibold ${highlightB}">${b}</td>
+      <td class="p-2 text-center text-xs">${diffStr}</td>
+    </tr>`;
+  }).join('');
+
+  // Add GIR row if applicable
+  let girRow = '';
+  if (girA !== null || girB !== null) {
+    const a = girA||0, b = girB||0;
+    const diff = b - a;
+    const diffStr = diff === 0 ? '—' : (diff > 0 ? `<span class="text-red-600">+${Math.round(diff*100)/100}</span>` : `<span class="text-blue-600">${Math.round(diff*100)/100}</span>`);
+    girRow = `<tr class="border-t border-slate-200 bg-amber-50/50">
+      <td class="p-2 font-medium text-slate-700">GIR <span class="text-slate-400 text-[10px]">mg/kg/min</span></td>
+      <td class="p-2 text-center font-semibold">${a||'—'}</td>
+      <td class="p-2 text-center font-semibold">${b||'—'}</td>
+      <td class="p-2 text-center text-xs">${diffStr}</td>
+    </tr>`;
+  }
+
+  // Buffers row
+  let bufferRow = '';
+  if (tA.lactate > 0 || tA.acetate > 0 || tB.lactate > 0 || tB.acetate > 0) {
+    const bufA = []; if (tA.lactate) bufA.push(`Lac ${tA.lactate}`); if (tA.acetate) bufA.push(`Ace ${tA.acetate}`); if (tA.gluconate) bufA.push(`Glu ${tA.gluconate}`);
+    const bufB = []; if (tB.lactate) bufB.push(`Lac ${tB.lactate}`); if (tB.acetate) bufB.push(`Ace ${tB.acetate}`); if (tB.gluconate) bufB.push(`Glu ${tB.gluconate}`);
+    bufferRow = `<tr class="border-t border-slate-100 text-[11px] text-slate-500">
+      <td class="p-2">Buffers <span class="text-slate-400 text-[10px]">mEq</span></td>
+      <td class="p-2 text-center">${bufA.join(', ')||'—'}</td>
+      <td class="p-2 text-center">${bufB.join(', ')||'—'}</td>
+      <td class="p-2 text-center">—</td>
+    </tr>`;
+  }
+
   return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
-    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">Σ</span>Electrolyte Delivery Summary (${duration}h)</h3>
-    <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">${items.filter(i=>i.val>0).map(i=>`
-      <div class="bg-${i.color}-50 rounded-lg p-3 text-center"><div class="text-xs text-slate-500">${i.label}</div><div class="text-lg font-bold text-${i.color}-700">${i.val}</div><div class="text-xs text-slate-400">${i.unit}</div></div>`).join('')}
-    </div>
-    ${totals.lactate>0||totals.acetate>0||totals.gluconate>0?`<div class="mt-2 text-xs text-slate-500">Lactate: ${totals.lactate} mEq | Acetate: ${totals.acetate} mEq | Gluconate: ${totals.gluconate} mEq</div>`:''}
+    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">⇄</span>Regimen Comparison (${duration}h)</h3>
+    <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50">
+      <th class="text-left p-2 font-semibold text-slate-600">Electrolyte</th>
+      <th class="p-2 font-semibold text-teal-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-teal-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">A</span>Regimen A</span></th>
+      <th class="p-2 font-semibold text-violet-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-violet-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">B</span>Regimen B</span></th>
+      <th class="p-2 font-semibold text-slate-500 text-center">Δ (B−A)</th>
+    </tr></thead><tbody>${rows}${girRow}${bufferRow}</tbody></table></div>
   </div>`;
 }
 
-function renderIVBreakdown(lines, duration) {
+function renderIVBreakdown(lines, duration, set) {
   const ELYTES = ['Na','K','Cl','Ca','Mg','PO4','dextrose'];
+  const color = set==='A' ? 'teal' : 'violet';
   return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
-    <h3 class="font-bold text-slate-800 mb-3">Per-Line Breakdown</h3>
+    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-5 h-5 bg-${color}-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">${set}</span>Regimen ${set} — Per-Line Breakdown</h3>
     <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="bg-slate-50">
       <th class="text-left p-2 font-semibold">Fluid</th><th class="p-2">Vol(mL)</th><th class="p-2">Rate</th>
       ${ELYTES.map(e=>`<th class="p-2">${e==='dextrose'?'Dex(g)':e}</th>`).join('')}
@@ -1743,13 +1809,21 @@ function renderIVBreakdown(lines, duration) {
   </div>`;
 }
 
-function renderGIR(gir, dextrose, duration, weight) {
-  const girClass = gir > 12 ? 'text-red-700' : gir > 8 ? 'text-amber-700' : 'text-green-700';
+function renderGIRCompare(girA, girB, dexA, dexB, duration, weight) {
+  const girClass = g => g > 12 ? 'text-red-700' : g > 8 ? 'text-amber-700' : 'text-green-700';
   return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
     <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">G</span>Glucose Infusion Rate (GIR)</h3>
-    <div class="bg-slate-50 rounded-lg p-4 text-center">
-      <div class="text-3xl font-bold ${girClass}">${gir} mg/kg/min</div>
-      <div class="text-xs text-slate-500 mt-1">(${dextrose}g dextrose ÷ ${duration}h ÷ ${weight}kg × 1000 ÷ 60)</div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-teal-50 rounded-lg p-4 text-center border border-teal-200">
+        <div class="text-xs font-semibold text-teal-700 mb-1">Regimen A</div>
+        <div class="text-2xl font-bold ${girA !== null ? girClass(girA) : 'text-slate-400'}">${girA !== null ? girA + ' mg/kg/min' : 'No dextrose'}</div>
+        ${girA !== null ? `<div class="text-[10px] text-slate-500 mt-1">${dexA}g ÷ ${duration}h ÷ ${weight}kg</div>` : ''}
+      </div>
+      <div class="bg-violet-50 rounded-lg p-4 text-center border border-violet-200">
+        <div class="text-xs font-semibold text-violet-700 mb-1">Regimen B</div>
+        <div class="text-2xl font-bold ${girB !== null ? girClass(girB) : 'text-slate-400'}">${girB !== null ? girB + ' mg/kg/min' : 'No dextrose'}</div>
+        ${girB !== null ? `<div class="text-[10px] text-slate-500 mt-1">${dexB}g ÷ ${duration}h ÷ ${weight}kg</div>` : ''}
+      </div>
     </div>
     <div class="mt-3 text-xs text-slate-500 space-y-1">
       <p>Neonates: Target GIR 4-6 mg/kg/min. Preterm: up to 8-12 mg/kg/min.</p>
@@ -1765,8 +1839,8 @@ function renderIVAlerts(alerts) {
   </div>`;
 }
 
-// Initialize with one fluid line
-document.addEventListener('DOMContentLoaded', () => addFluidLine());
+// Initialize with one fluid line per set
+document.addEventListener('DOMContentLoaded', () => { addFluidLine('A'); addFluidLine('B'); });
 
 </script>
 </body>
