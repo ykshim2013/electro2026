@@ -246,22 +246,16 @@
 </div>
 <div id="tab-content-ivCalc" class="tab-panel hidden">
   <main class="max-w-7xl mx-auto px-4 py-4">
-    <!-- Duration shared across sets -->
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4 no-print">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
-        <div><label class="block text-xs font-medium text-slate-500 mb-1">Duration (hours)</label><input type="number" id="iv-duration" min="1" max="72" step="1" value="24" placeholder="24" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm"></div>
-        <div class="col-span-1 sm:col-span-3 flex justify-end">
-          <button onclick="onCalculate()" class="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-md text-sm no-print">Compare Regimens</button>
-        </div>
-      </div>
-    </div>
     <!-- Two-set grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 no-print">
       <!-- Set A -->
       <div class="bg-white rounded-xl shadow-sm border-2 border-teal-300 p-4">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold text-sm text-teal-700 flex items-center gap-2"><span class="w-6 h-6 bg-teal-600 text-white rounded-full flex items-center justify-center text-xs font-bold">A</span>Regimen A</h3>
-          <button onclick="addFluidLine('A')" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg">+ Add Line</button>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-500">Duration</label><input type="number" id="iv-duration-A" min="1" max="72" step="1" value="24" class="w-16 px-2 py-1 border border-teal-300 rounded-lg text-xs text-center"><span class="text-xs text-slate-400">hr</span>
+            <button onclick="addFluidLine('A')" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg">+ Add Line</button>
+          </div>
         </div>
         <div id="iv-fluid-lines-A" class="space-y-3"></div>
       </div>
@@ -269,10 +263,16 @@
       <div class="bg-white rounded-xl shadow-sm border-2 border-violet-300 p-4">
         <div class="flex items-center justify-between mb-3">
           <h3 class="font-semibold text-sm text-violet-700 flex items-center gap-2"><span class="w-6 h-6 bg-violet-600 text-white rounded-full flex items-center justify-center text-xs font-bold">B</span>Regimen B</h3>
-          <button onclick="addFluidLine('B')" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg">+ Add Line</button>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-500">Duration</label><input type="number" id="iv-duration-B" min="1" max="72" step="1" value="24" class="w-16 px-2 py-1 border border-violet-300 rounded-lg text-xs text-center"><span class="text-xs text-slate-400">hr</span>
+            <button onclick="addFluidLine('B')" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg">+ Add Line</button>
+          </div>
         </div>
         <div id="iv-fluid-lines-B" class="space-y-3"></div>
       </div>
+    </div>
+    <div class="flex justify-center mb-4 no-print">
+      <button onclick="onCalculate()" class="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-md text-sm">Compare Regimens</button>
     </div>
     <section id="results-ivCalc">
       <div id="placeholder-ivCalc" class="flex flex-col items-center justify-center py-20 text-slate-400"><p class="text-lg font-medium">Add fluid lines to each regimen, then Compare</p></div>
@@ -1685,38 +1685,40 @@ function calcSetTotals(set, duration) {
 
 function calcFluidElectrolytes() {
   const demo = getDemo();
-  const duration = parseFloat(document.getElementById('iv-duration').value)||24;
+  const durA = parseFloat(document.getElementById('iv-duration-A').value)||24;
+  const durB = parseFloat(document.getElementById('iv-duration-B').value)||24;
   const hasA = document.getElementById('iv-fluid-lines-A').children.length > 0;
   const hasB = document.getElementById('iv-fluid-lines-B').children.length > 0;
   if (!hasA && !hasB) { document.getElementById('errors-ivCalc').classList.remove('hidden'); document.getElementById('error-list-ivCalc').innerHTML='<li>Add at least one fluid line to either regimen.</li>'; return; }
   document.getElementById('errors-ivCalc').classList.add('hidden');
 
-  const setA = calcSetTotals('A', duration);
-  const setB = calcSetTotals('B', duration);
+  const setA = calcSetTotals('A', durA);
+  const setB = calcSetTotals('B', durB);
 
   // GIR
   let girA = null, girB = null;
-  if (demo.weight && setA.totals.dextrose > 0) girA = Math.round((setA.totals.dextrose * 1000 / duration) / (demo.weight * 60) * 100) / 100;
-  if (demo.weight && setB.totals.dextrose > 0) girB = Math.round((setB.totals.dextrose * 1000 / duration) / (demo.weight * 60) * 100) / 100;
+  if (demo.weight && setA.totals.dextrose > 0) girA = Math.round((setA.totals.dextrose * 1000 / durA) / (demo.weight * 60) * 100) / 100;
+  if (demo.weight && setB.totals.dextrose > 0) girB = Math.round((setB.totals.dextrose * 1000 / durB) / (demo.weight * 60) * 100) / 100;
 
   // Safety alerts
   const alerts = [];
   ['A','B'].forEach(s => {
     const t = s==='A' ? setA.totals : setB.totals;
+    const dur = s==='A' ? durA : durB;
     const g = s==='A' ? girA : girB;
     const label = `Regimen ${s}`;
     if (t.volume === 0) return;
-    if (t.K > 80 && demo.isAdult) alerts.push({type:'warning',text:`${label}: Total K+ ${t.K} mEq/${duration}h. Monitor for hyperkalemia.`});
-    if (t.K > 3*demo.weight && demo.isPed) alerts.push({type:'critical',text:`${label}: K+ ${t.K} mEq/${duration}h (${(t.K/demo.weight).toFixed(1)} mEq/kg/day). Exceeds pediatric limit 3 mEq/kg/day.`});
+    if (t.K > 80 && demo.isAdult) alerts.push({type:'warning',text:`${label}: Total K+ ${t.K} mEq/${dur}h. Monitor for hyperkalemia.`});
+    if (t.K > 3*demo.weight && demo.isPed) alerts.push({type:'critical',text:`${label}: K+ ${t.K} mEq/${dur}h (${(t.K/demo.weight).toFixed(1)} mEq/kg/day). Exceeds pediatric limit 3 mEq/kg/day.`});
     if (g !== null && g > 12) alerts.push({type:'warning',text:`${label}: GIR ${g} mg/kg/min exceeds 12 mg/kg/min.`});
-    if (t.Na > 200 && demo.isAdult) alerts.push({type:'info',text:`${label}: Na+ ${t.Na} mEq/${duration}h.`});
+    if (t.Na > 200 && demo.isAdult) alerts.push({type:'info',text:`${label}: Na+ ${t.Na} mEq/${dur}h.`});
   });
 
   // Render
-  document.getElementById('card-iv-comparison').innerHTML = renderIVComparison(setA.totals, setB.totals, duration, girA, girB);
-  document.getElementById('card-iv-breakdown-A').innerHTML = setA.lineResults.length ? renderIVBreakdown(setA.lineResults, duration, 'A') : '';
-  document.getElementById('card-iv-breakdown-B').innerHTML = setB.lineResults.length ? renderIVBreakdown(setB.lineResults, duration, 'B') : '';
-  document.getElementById('card-iv-gir').innerHTML = (girA !== null || girB !== null) ? renderGIRCompare(girA, girB, setA.totals.dextrose, setB.totals.dextrose, duration, demo.weight) : '';
+  document.getElementById('card-iv-comparison').innerHTML = renderIVComparison(setA.totals, setB.totals, durA, durB, girA, girB);
+  document.getElementById('card-iv-breakdown-A').innerHTML = setA.lineResults.length ? renderIVBreakdown(setA.lineResults, durA, 'A') : '';
+  document.getElementById('card-iv-breakdown-B').innerHTML = setB.lineResults.length ? renderIVBreakdown(setB.lineResults, durB, 'B') : '';
+  document.getElementById('card-iv-gir').innerHTML = (girA !== null || girB !== null) ? renderGIRCompare(girA, girB, setA.totals.dextrose, setB.totals.dextrose, durA, durB, demo.weight) : '';
   document.getElementById('card-iv-alerts').innerHTML = alerts.length ? renderIVAlerts(alerts) : '';
 
   document.getElementById('results-content-ivCalc').classList.remove('hidden');
@@ -1724,7 +1726,7 @@ function calcFluidElectrolytes() {
   document.getElementById('header-badge').classList.add('hidden');
 }
 
-function renderIVComparison(tA, tB, duration, girA, girB) {
+function renderIVComparison(tA, tB, durA, durB, girA, girB) {
   const ELYTES = [
     { key:'Na', label:'Na+', unit:'mEq' },
     { key:'K', label:'K+', unit:'mEq' },
@@ -1778,11 +1780,11 @@ function renderIVComparison(tA, tB, duration, girA, girB) {
   }
 
   return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
-    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">⇄</span>Regimen Comparison (${duration}h)</h3>
+    <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">⇄</span>Regimen Comparison</h3>
     <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50">
       <th class="text-left p-2 font-semibold text-slate-600">Electrolyte</th>
-      <th class="p-2 font-semibold text-teal-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-teal-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">A</span>Regimen A</span></th>
-      <th class="p-2 font-semibold text-violet-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-violet-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">B</span>Regimen B</span></th>
+      <th class="p-2 font-semibold text-teal-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-teal-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">A</span>Regimen A <span class="font-normal text-[10px] text-teal-500">(${durA}h)</span></span></th>
+      <th class="p-2 font-semibold text-violet-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-violet-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">B</span>Regimen B <span class="font-normal text-[10px] text-violet-500">(${durB}h)</span></span></th>
       <th class="p-2 font-semibold text-slate-500 text-center">Δ (B−A)</th>
     </tr></thead><tbody>${rows}${girRow}${bufferRow}</tbody></table></div>
   </div>`;
@@ -1809,7 +1811,7 @@ function renderIVBreakdown(lines, duration, set) {
   </div>`;
 }
 
-function renderGIRCompare(girA, girB, dexA, dexB, duration, weight) {
+function renderGIRCompare(girA, girB, dexA, dexB, durA, durB, weight) {
   const girClass = g => g > 12 ? 'text-red-700' : g > 8 ? 'text-amber-700' : 'text-green-700';
   return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
     <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">G</span>Glucose Infusion Rate (GIR)</h3>
@@ -1817,12 +1819,12 @@ function renderGIRCompare(girA, girB, dexA, dexB, duration, weight) {
       <div class="bg-teal-50 rounded-lg p-4 text-center border border-teal-200">
         <div class="text-xs font-semibold text-teal-700 mb-1">Regimen A</div>
         <div class="text-2xl font-bold ${girA !== null ? girClass(girA) : 'text-slate-400'}">${girA !== null ? girA + ' mg/kg/min' : 'No dextrose'}</div>
-        ${girA !== null ? `<div class="text-[10px] text-slate-500 mt-1">${dexA}g ÷ ${duration}h ÷ ${weight}kg</div>` : ''}
+        ${girA !== null ? `<div class="text-[10px] text-slate-500 mt-1">${dexA}g ÷ ${durA}h ÷ ${weight}kg</div>` : ''}
       </div>
       <div class="bg-violet-50 rounded-lg p-4 text-center border border-violet-200">
         <div class="text-xs font-semibold text-violet-700 mb-1">Regimen B</div>
         <div class="text-2xl font-bold ${girB !== null ? girClass(girB) : 'text-slate-400'}">${girB !== null ? girB + ' mg/kg/min' : 'No dextrose'}</div>
-        ${girB !== null ? `<div class="text-[10px] text-slate-500 mt-1">${dexB}g ÷ ${duration}h ÷ ${weight}kg</div>` : ''}
+        ${girB !== null ? `<div class="text-[10px] text-slate-500 mt-1">${dexB}g ÷ ${durB}h ÷ ${weight}kg</div>` : ''}
       </div>
     </div>
     <div class="mt-3 text-xs text-slate-500 space-y-1">
