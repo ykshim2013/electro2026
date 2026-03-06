@@ -1658,8 +1658,8 @@ function addFluidLine(set) {
       <div><label class="block text-xs text-slate-500 mb-1">Ca2+</label><input type="number" id="iv-cCa-${id}" min="0" step="0.1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
       <div><label class="block text-xs text-slate-500 mb-1">Dex(g/L)</label><input type="number" id="iv-cDex-${id}" min="0" step="1" placeholder="0" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div>
     </div>
-    <div class="mt-2"><label class="block text-xs text-slate-500 mb-1">Additive 1</label><div class="grid grid-cols-3 gap-2"><select id="iv-add1-${id}" class="col-span-2 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add1-amt-${id}" min="0" step="1" placeholder="mEq or mL" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div></div>
-    <div class="mt-1"><label class="block text-xs text-slate-500 mb-1">Additive 2</label><div class="grid grid-cols-3 gap-2"><select id="iv-add2-${id}" class="col-span-2 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add2-amt-${id}" min="0" step="1" placeholder="mEq or mL" class="px-2 py-1.5 border border-slate-300 rounded-lg text-xs"></div></div>
+    <div class="mt-2"><label class="block text-xs text-slate-500 mb-1">Additive 1</label><div class="flex gap-1 items-center"><select id="iv-add1-${id}" class="flex-1 min-w-0 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add1-amt-${id}" min="0" step="0.1" placeholder="amt" class="w-16 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><select id="iv-add1-unit-${id}" class="w-14 px-1 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"><option value="mEq">mEq</option><option value="mL">mL</option></select></div></div>
+    <div class="mt-1"><label class="block text-xs text-slate-500 mb-1">Additive 2</label><div class="flex gap-1 items-center"><select id="iv-add2-${id}" class="flex-1 min-w-0 px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white">${addOpts}</select><input type="number" id="iv-add2-amt-${id}" min="0" step="0.1" placeholder="amt" class="w-16 px-2 py-1.5 border border-slate-300 rounded-lg text-xs"><select id="iv-add2-unit-${id}" class="w-14 px-1 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"><option value="mEq">mEq</option><option value="mL">mL</option></select></div></div>
   </div>`;
   document.getElementById('iv-fluid-lines-'+set).insertAdjacentHTML('beforeend', html);
 }
@@ -1709,7 +1709,17 @@ function calcSetTotals(set, duration) {
       const addAmt = parseFloat(document.getElementById(`iv-add${a}-amt-${id}`)?.value)||0;
       if (addKey && addAmt && ADDITIVE_DB[addKey]) {
         const add = ADDITIVE_DB[addKey];
-        const perBagML = addAmt;
+        const unitSel = document.getElementById(`iv-add${a}-unit-${id}`)?.value || 'mEq';
+        // Determine mL of additive per bag
+        let perBagML;
+        if (unitSel === 'mL') {
+          perBagML = addAmt;
+        } else {
+          // User entered mEq — find the primary ion concentration to convert
+          const primaryIon = Object.keys(add.mEqPerML)[0];
+          const primaryConc = add.mEqPerML[primaryIon]; // mEq per mL
+          perBagML = addAmt / primaryConc; // convert mEq to mL
+        }
         Object.entries(add.mEqPerML).forEach(([ion, perML]) => {
           const bagVol = vol || 1000;
           const totalMEqDelivered = perML * perBagML * (effectiveVol / bagVol);
@@ -1718,7 +1728,8 @@ function calcSetTotals(set, duration) {
             totals[ion] += totalMEqDelivered;
           }
         });
-        lineData.label += ` + ${add.label} ${addAmt}mL`;
+        const dispAmt = Math.round(addAmt*10)/10;
+        lineData.label += ` + ${add.label} ${dispAmt}${unitSel}`;
       }
     }
     lineResults.push(lineData);
