@@ -1774,7 +1774,7 @@ function calcFluidElectrolytes() {
   });
 
   // Render
-  document.getElementById('card-iv-comparison').innerHTML = renderIVComparison(setA.totals, setB.totals, durA, durB, girA, girB);
+  document.getElementById('card-iv-comparison').innerHTML = renderIVComparison(setA.totals, setB.totals, durA, durB, girA, girB, demo.weight);
   document.getElementById('card-iv-breakdown-A').innerHTML = setA.lineResults.length ? renderIVBreakdown(setA.lineResults, durA, 'A') : '';
   document.getElementById('card-iv-breakdown-B').innerHTML = setB.lineResults.length ? renderIVBreakdown(setB.lineResults, durB, 'B') : '';
   document.getElementById('card-iv-gir').innerHTML = (girA !== null || girB !== null) ? renderGIRCompare(girA, girB, setA.totals.dextrose, setB.totals.dextrose, durA, durB, demo.weight) : '';
@@ -1785,29 +1785,39 @@ function calcFluidElectrolytes() {
   document.getElementById('header-badge').classList.add('hidden');
 }
 
-function renderIVComparison(tA, tB, durA, durB, girA, girB) {
+function renderIVComparison(tA, tB, durA, durB, girA, girB, weight) {
   const ELYTES = [
-    { key:'Na', label:'Na+', unit:'mEq' },
-    { key:'K', label:'K+', unit:'mEq' },
-    { key:'Cl', label:'Cl-', unit:'mEq' },
-    { key:'Ca', label:'Ca2+', unit:'mEq' },
-    { key:'Mg', label:'Mg2+', unit:'mEq' },
-    { key:'PO4', label:'PO4', unit:'mmol' },
-    { key:'dextrose', label:'Dextrose', unit:'g' },
-    { key:'volume', label:'Total Vol', unit:'mL' },
-    { key:'freeWater', label:'Free Water', unit:'mL' }
+    { key:'Na', label:'Na+', unit:'mEq', perKg:true },
+    { key:'K', label:'K+', unit:'mEq', perKg:true },
+    { key:'Cl', label:'Cl-', unit:'mEq', perKg:true },
+    { key:'Ca', label:'Ca2+', unit:'mEq', perKg:true },
+    { key:'Mg', label:'Mg2+', unit:'mEq', perKg:true },
+    { key:'PO4', label:'PO4', unit:'mmol', perKg:true },
+    { key:'dextrose', label:'Dextrose', unit:'g', perKg:false },
+    { key:'volume', label:'Total Vol', unit:'mL', perKg:false },
+    { key:'freeWater', label:'Free Water', unit:'mL', perKg:false }
   ];
+  const r1 = v => Math.round(v*10)/10;
+  const r2 = v => Math.round(v*100)/100;
   const rows = ELYTES.filter(e => (tA[e.key]||0) > 0 || (tB[e.key]||0) > 0).map(e => {
     const a = tA[e.key]||0, b = tB[e.key]||0;
     const diff = b - a;
-    const diffStr = diff === 0 ? '—' : (diff > 0 ? `<span class="text-red-600">+${Math.round(diff*10)/10}</span>` : `<span class="text-blue-600">${Math.round(diff*10)/10}</span>`);
+    const diffStr = diff === 0 ? '—' : (diff > 0 ? `<span class="text-red-600">+${r1(diff)}</span>` : `<span class="text-blue-600">${r1(diff)}</span>`);
     const highlightA = a < b ? 'bg-teal-50' : a > b ? '' : '';
     const highlightB = b < a ? 'bg-violet-50' : b > a ? '' : '';
+    // per-kg and per-kg/day columns
+    let pkgA = '', pkgB = '', pkgdA = '', pkgdB = '';
+    if (e.perKg && weight) {
+      pkgA = r2(a / weight); pkgB = r2(b / weight);
+      pkgdA = r2(a / weight / durA * 24); pkgdB = r2(b / weight / durB * 24);
+    }
     return `<tr class="border-t border-slate-100">
       <td class="p-2 font-medium text-slate-700">${e.label} <span class="text-slate-400 text-[10px]">${e.unit}</span></td>
       <td class="p-2 text-center font-semibold ${highlightA}">${a}</td>
       <td class="p-2 text-center font-semibold ${highlightB}">${b}</td>
       <td class="p-2 text-center text-xs">${diffStr}</td>
+      ${e.perKg && weight ? `<td class="p-2 text-center text-xs text-teal-700">${pkgA}</td><td class="p-2 text-center text-xs text-violet-700">${pkgB}</td>
+      <td class="p-2 text-center text-xs text-teal-700">${pkgdA}</td><td class="p-2 text-center text-xs text-violet-700">${pkgdB}</td>` : `<td class="p-2" colspan="4"></td>`}
     </tr>`;
   }).join('');
 
@@ -1822,6 +1832,7 @@ function renderIVComparison(tA, tB, durA, durB, girA, girB) {
       <td class="p-2 text-center font-semibold">${a||'—'}</td>
       <td class="p-2 text-center font-semibold">${b||'—'}</td>
       <td class="p-2 text-center text-xs">${diffStr}</td>
+      ${weight ? '<td class="p-2" colspan="4"></td>' : ''}
     </tr>`;
   }
 
@@ -1835,17 +1846,23 @@ function renderIVComparison(tA, tB, durA, durB, girA, girB) {
       <td class="p-2 text-center">${bufA.join(', ')||'—'}</td>
       <td class="p-2 text-center">${bufB.join(', ')||'—'}</td>
       <td class="p-2 text-center">—</td>
+      ${weight ? '<td class="p-2" colspan="4"></td>' : ''}
     </tr>`;
   }
 
   return `<div class="card-print rounded-xl bg-white border border-slate-200 shadow-sm p-5">
     <h3 class="font-bold text-slate-800 mb-3 flex items-center gap-2"><span class="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold">⇄</span>Regimen Comparison</h3>
     <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="bg-slate-50">
-      <th class="text-left p-2 font-semibold text-slate-600">Electrolyte</th>
-      <th class="p-2 font-semibold text-teal-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-teal-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">A</span>Regimen A <span class="font-normal text-[10px] text-teal-500">(${durA}h)</span></span></th>
-      <th class="p-2 font-semibold text-violet-700 text-center"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-violet-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">B</span>Regimen B <span class="font-normal text-[10px] text-violet-500">(${durB}h)</span></span></th>
-      <th class="p-2 font-semibold text-slate-500 text-center">Δ (B−A)</th>
-    </tr></thead><tbody>${rows}${girRow}${bufferRow}</tbody></table></div>
+      <th class="text-left p-2 font-semibold text-slate-600" rowspan="2">Electrolyte</th>
+      <th class="p-2 font-semibold text-teal-700 text-center" rowspan="2"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-teal-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">A</span>Regimen A <span class="font-normal text-[10px] text-teal-500">(${durA}h)</span></span></th>
+      <th class="p-2 font-semibold text-violet-700 text-center" rowspan="2"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-violet-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">B</span>Regimen B <span class="font-normal text-[10px] text-violet-500">(${durB}h)</span></span></th>
+      <th class="p-2 font-semibold text-slate-500 text-center" rowspan="2">Δ (B−A)</th>
+      ${weight ? `<th class="p-2 font-semibold text-slate-500 text-center border-l border-slate-200" colspan="2">/kg</th>
+      <th class="p-2 font-semibold text-slate-500 text-center border-l border-slate-200" colspan="2">/kg/day</th>` : ''}
+    </tr>${weight ? `<tr class="bg-slate-50 text-[10px]">
+      <th class="p-1 text-teal-600 text-center border-l border-slate-200">A</th><th class="p-1 text-violet-600 text-center">B</th>
+      <th class="p-1 text-teal-600 text-center border-l border-slate-200">A</th><th class="p-1 text-violet-600 text-center">B</th>
+    </tr>` : ''}</thead><tbody>${rows}${girRow}${bufferRow}</tbody></table></div>
   </div>`;
 }
 
